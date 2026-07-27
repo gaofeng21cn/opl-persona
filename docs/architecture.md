@@ -1,5 +1,9 @@
 # OPL Persona Architecture
 
+The cross-repository design authority is
+[Architecture Guidance](architecture-guidance.md). This file keeps the
+Persona-specific owner split and v1 contract close to the implementation.
+
 ## Owner split
 
 Persona is a judgment and proposal layer. It does not become a second mail
