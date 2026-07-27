@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "source": "first_party",
   "package_role": "framework_capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -33,9 +33,17 @@
     "canonicalization": "ordered_path_nul_file_bytes",
     "paths": [
       ".codex-plugin/plugin.json",
+      "bin/opl-persona",
+      "runtime/opl_persona/__init__.py",
+      "runtime/opl_persona/__main__.py",
+      "runtime/opl_persona/app_contributions.py",
+      "runtime/opl_persona/cli.py",
+      "runtime/opl_persona/core.py",
+      "runtime/opl_persona/obsidian.py",
+      "runtime/opl_persona/paths.py",
       "skills/opl-persona/SKILL.md"
     ],
-    "digest": "sha256:901c1040e74a1a0d1c3e60e789930196d9388eded4ba3224b17658f1c6413538"
+    "digest": "sha256:60f231dc90d92783797c7a129ab3b616d3b96216f3d505d8337b9ca83d5e1204"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
@@ -47,7 +55,7 @@
       "schema_version": "opl-package-app-contribution-cli.v1",
       "transport": "stdin_json_stdout_json",
       "argv": [
-        "opl-persona",
+        "./bin/opl-persona",
         "--json",
         "app-contribution"
       ],

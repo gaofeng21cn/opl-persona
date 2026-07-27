@@ -1,6 +1,10 @@
 import io
 import json
+import os
+import shutil
+import subprocess
 import sys
+from pathlib import Path
 
 from opl_persona.app_contributions import (
     ACTION_CONTRACTS,
@@ -9,6 +13,10 @@ from opl_persona.app_contributions import (
     RESPONSE_SCHEMA,
 )
 from opl_persona.cli import main
+
+
+ROOT = Path(__file__).parents[1]
+PLUGIN_ROOT = ROOT / "plugins" / "opl-persona"
 
 
 def run_cli(monkeypatch, capsys, request: object) -> tuple[int, dict]:
@@ -114,3 +122,31 @@ def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
         "personal.context.v1#proposal.inspect",
         "personal.context.v1#proposal.approve",
     }
+
+
+def test_installed_carrier_wrapper_serves_abi_without_the_source_checkout(tmp_path: Path) -> None:
+    installed_root = tmp_path / "installed-plugin"
+    shutil.copytree(PLUGIN_ROOT, installed_root)
+    wrapper = installed_root / "bin" / "opl-persona"
+    wrapper.chmod(0o755)
+    request = {
+        "schema_version": REQUEST_SCHEMA,
+        "operation": "describe",
+        "ref": "personal.context.v1#today",
+    }
+    environment = os.environ | {"PYTHONPATH": ""}
+    result = subprocess.run(
+        [str(wrapper), "--json", "app-contribution"],
+        cwd=tmp_path,
+        env=environment,
+        input=json.dumps(request),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    response = json.loads(result.stdout)
+    assert response["schema_version"] == RESPONSE_SCHEMA
+    assert response["ok"] is True
+    assert response["ref"] == request["ref"]

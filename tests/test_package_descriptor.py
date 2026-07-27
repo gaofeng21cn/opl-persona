@@ -12,6 +12,8 @@ PACKAGE_PATH = PLUGIN_ROOT / "opl-package.json"
 LEGACY_PACKAGE_PATH = ROOT / "packages" / "opl-persona" / "package.json"
 PLUGIN_PATH = PLUGIN_ROOT / ".codex-plugin" / "plugin.json"
 SKILL_PATH = PLUGIN_ROOT / "skills" / "opl-persona" / "SKILL.md"
+ENTRYPOINT_PATH = PLUGIN_ROOT / "bin" / "opl-persona"
+RUNTIME_ROOT = PLUGIN_ROOT / "runtime" / "opl_persona"
 
 CAPABILITY_IDS = {
     "personal.context.v1",
@@ -51,6 +53,8 @@ def test_package_identity_capabilities_and_plugin_version_are_aligned() -> None:
     assert package["codex_surface"]["plugin_source_path"] == "."
 
     assert SKILL_PATH.is_file()
+    assert ENTRYPOINT_PATH.is_file()
+    assert RUNTIME_ROOT.is_dir()
     assert "app_contributions" not in plugin
 
 
@@ -115,7 +119,7 @@ def test_app_contribution_abi_is_package_owned_and_matches_declared_refs() -> No
     assert abi == {
         "schema_version": "opl-package-app-contribution-cli.v1",
         "transport": "stdin_json_stdout_json",
-        "argv": ["opl-persona", "--json", "app-contribution"],
+        "argv": ["./bin/opl-persona", "--json", "app-contribution"],
         "request_schema": "opl-package-app-contribution-request.v1",
         "response_schema": "opl-package-app-contribution-response.v1",
     }

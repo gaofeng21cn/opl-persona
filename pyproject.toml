@@ -4,18 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opl-persona"
-version = "0.1.1"
+version = "0.1.2"
 description = "Evidence-backed cross-domain personal context and output proposals for OPL."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
-[project.scripts]
-opl-persona = "opl_persona.cli:main"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/opl_persona"]
-
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["plugins/opl-persona/runtime"]
 testpaths = ["tests"]
