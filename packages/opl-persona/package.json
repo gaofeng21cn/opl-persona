@@ -1,0 +1,121 @@
+{
+  "surface_kind": "opl_capability_package_manifest.v2",
+  "package_id": "opl-persona",
+  "display_name": "OPL Persona",
+  "publisher": "one-person-lab",
+  "version": "0.1.0",
+  "source": "first_party",
+  "package_role": "framework_capability_package",
+  "source_repo": "https://github.com/gaofeng21cn/opl-persona",
+  "machine_boundary": "This Package declares Persona capabilities and role-neutral App contributions. It does not own private mail, knowledge, website, credential, approval, installed, or runtime truth.",
+  "capability_abi": {
+    "id": "opl-persona.capabilities",
+    "version": "1.0.0",
+    "compatibility_policy": "same_major"
+  },
+  "exports": {
+    "core_skill_ids": [
+      "opl-persona"
+    ],
+    "core_module_ids": [
+      "personal.context.v1",
+      "personal.memory.v1",
+      "knowledge.obsidian.v1",
+      "communications.mail.v1",
+      "website.publication.v1"
+    ],
+    "optional_skill_policy_ref": "packages/opl-persona/package.json#/exports",
+    "optional_skills_installed_by_default": true,
+    "default_materialization_policy": "all_exported_skills"
+  },
+  "content_lock": {
+    "algorithm": "sha256",
+    "canonicalization": "ordered_path_nul_file_bytes",
+    "paths": [
+      "plugins/opl-persona/.codex-plugin/plugin.json",
+      "plugins/opl-persona/skills/opl-persona/SKILL.md"
+    ],
+    "digest": "sha256:2f0560a1124fafb8b807c65d3a073bc88f1a2d54d940f41351020e9cd4f61c98"
+  },
+  "codex_surface": {
+    "plugin_id": "opl-persona",
+    "plugin_source_path": "../../plugins/opl-persona",
+    "carrier_source_commit": "bf8b730b7ce3650e2d3815539b8ab0dfaaf3a3ff",
+    "codex_default_exposure": false,
+    "optional_install_policy": "all_exported_skills"
+  },
+  "app_contributions": {
+    "schema_version": "opl-app-contributions.v1",
+    "navigation": [
+      {
+        "navigation_id": "persona.today",
+        "label_i18n": {
+          "zh-CN": "Persona",
+          "en-US": "Persona"
+        },
+        "view_id": "persona.today",
+        "sort_order": 200
+      },
+      {
+        "navigation_id": "persona.proposals",
+        "label_i18n": {
+          "zh-CN": "输出提案",
+          "en-US": "Output proposals"
+        },
+        "view_id": "persona.proposals",
+        "sort_order": 210
+      }
+    ],
+    "views": [
+      {
+        "view_id": "persona.today",
+        "view_type": "activity_log",
+        "title_i18n": {
+          "zh-CN": "PI 数字分身",
+          "en-US": "PI Persona"
+        },
+        "data_ref": "personal.context.v1#today",
+        "empty_state_i18n": {
+          "zh-CN": "暂无跨领域活动",
+          "en-US": "No cross-domain activity"
+        }
+      },
+      {
+        "view_id": "persona.proposals",
+        "view_type": "approval_diff",
+        "title_i18n": {
+          "zh-CN": "输出提案审核",
+          "en-US": "Review output proposals"
+        },
+        "data_ref": "personal.context.v1#proposals",
+        "command_ids": [
+          "persona.proposal.inspect",
+          "persona.proposal.approve"
+        ],
+        "empty_state_i18n": {
+          "zh-CN": "暂无待审核提案",
+          "en-US": "No proposals awaiting review"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command_id": "persona.proposal.inspect",
+        "label_i18n": {
+          "zh-CN": "查看提案证据",
+          "en-US": "Inspect proposal evidence"
+        },
+        "action_ref": "personal.context.v1#proposal.inspect"
+      },
+      {
+        "command_id": "persona.proposal.approve",
+        "label_i18n": {
+          "zh-CN": "批准提案",
+          "en-US": "Approve proposal"
+        },
+        "action_ref": "personal.context.v1#proposal.approve",
+        "confirmation_required": true
+      }
+    ]
+  }
+}

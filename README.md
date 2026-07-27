@@ -1,0 +1,19 @@
+# OPL Persona
+
+OPL Persona is the cross-domain personal context layer for OPL. It turns
+evidence-backed inputs from mail, Obsidian, and the lab website into explicit,
+reviewable output proposals.
+
+Persona does not own mail, Obsidian, or website data. Those systems remain the
+authorities for their own content. Persona stores only contracts, reasoning
+inputs, provenance, and proposal state under a user-selected data root.
+
+## v1 workflow
+
+```text
+publication input -> knowledge ingestion proposal + website update proposal
+Obsidian memo      -> website article proposal + Relay mail draft context
+```
+
+Every external write is a proposal until the user approves it. The package,
+plugin, and source checkout never contain private data.

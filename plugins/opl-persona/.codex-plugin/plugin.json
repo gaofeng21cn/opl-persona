@@ -1,0 +1,30 @@
+{
+  "name": "opl-persona",
+  "version": "0.1.0",
+  "description": "Cross-domain PI context and reviewable output proposals for OPL.",
+  "author": {
+    "name": "OPL"
+  },
+  "repository": "https://github.com/gaofeng21cn/opl-persona",
+  "license": "MIT",
+  "keywords": ["persona", "memory", "knowledge", "mail", "website"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "OPL Persona",
+    "shortDescription": "A private, evidence-backed PI digital counterpart.",
+    "longDescription": "Coordinate approved personal context across OPL Relay, Obsidian, and the lab website without owning any private source data.",
+    "developerName": "OPL",
+    "category": "Productivity",
+    "capabilities": [
+      "PI context",
+      "Evidence-backed proposals",
+      "Knowledge-to-website output",
+      "Knowledge-to-mail output"
+    ],
+    "defaultPrompt": [
+      "根据一篇论文生成知识库更新和实验室网站更新提案。",
+      "把这篇 Obsidian 技术备忘录整理成网站文章和邮件草稿上下文。",
+      "检查所有待审核的 Persona 输出提案。"
+    ]
+  }
+}
