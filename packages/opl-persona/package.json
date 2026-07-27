@@ -40,7 +40,7 @@
   "codex_surface": {
     "plugin_id": "opl-persona",
     "plugin_source_path": "../../plugins/opl-persona",
-    "carrier_source_commit": "bf8b730b7ce3650e2d3815539b8ab0dfaaf3a3ff",
+    "carrier_source_commit": "79fea261bb3660154346d76819061ca0ad80d300",
     "codex_default_exposure": false,
     "optional_install_policy": "all_exported_skills"
   },
