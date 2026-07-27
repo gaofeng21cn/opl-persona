@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "source": "first_party",
   "package_role": "framework_capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -24,7 +24,7 @@
       "communications.mail.v1",
       "website.publication.v1"
     ],
-    "optional_skill_policy_ref": "packages/opl-persona/package.json#/exports",
+    "optional_skill_policy_ref": "opl-package.json#/exports",
     "optional_skills_installed_by_default": true,
     "default_materialization_policy": "all_exported_skills"
   },
@@ -32,14 +32,14 @@
     "algorithm": "sha256",
     "canonicalization": "ordered_path_nul_file_bytes",
     "paths": [
-      "plugins/opl-persona/.codex-plugin/plugin.json",
-      "plugins/opl-persona/skills/opl-persona/SKILL.md"
+      ".codex-plugin/plugin.json",
+      "skills/opl-persona/SKILL.md"
     ],
-    "digest": "sha256:2f0560a1124fafb8b807c65d3a073bc88f1a2d54d940f41351020e9cd4f61c98"
+    "digest": "sha256:901c1040e74a1a0d1c3e60e789930196d9388eded4ba3224b17658f1c6413538"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
-    "plugin_source_path": "../../plugins/opl-persona",
+    "plugin_source_path": ".",
     "carrier_source_commit": "79fea261bb3660154346d76819061ca0ad80d300",
     "codex_default_exposure": false,
     "optional_install_policy": "all_exported_skills"

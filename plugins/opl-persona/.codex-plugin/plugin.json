@@ -1,6 +1,6 @@
 {
   "name": "opl-persona",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cross-domain PI context and reviewable output proposals for OPL.",
   "author": {
     "name": "OPL"
