@@ -10,6 +10,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.scripts]
+opl-persona = "opl_persona.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["plugins/opl-persona/runtime/opl_persona"]
+
 [tool.pytest.ini_options]
 pythonpath = ["plugins/opl-persona/runtime"]
 testpaths = ["tests"]
