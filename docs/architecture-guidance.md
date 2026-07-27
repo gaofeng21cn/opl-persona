@@ -149,6 +149,10 @@ artifact_view activity_log
 The Shell renders the App contract. It should not invent domain semantics or
 persist a shadow copy of Package state.
 
+The deferred implementation plan for role-neutral capability management and
+unified approval views is in
+[OPL App Capability Management and Unified Approval Plan](deferred-opl-app-capability-management.md).
+
 ## Proposal-first mutation model
 
 Every cross-system write follows this lifecycle:
