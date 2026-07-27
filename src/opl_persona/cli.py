@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .app_contributions import handle_request
 from .core import build_memo_proposals, build_publication_proposals, dump_json
 from .paths import PersonaPaths
 from .obsidian import memo_proposals_from_file
@@ -24,6 +25,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor")
     sub.add_parser("workspace-init")
+    sub.add_parser(
+        "app-contribution",
+        help="Serve the Package-owned app contribution JSON ABI.",
+    )
     proposal = sub.add_parser("proposal")
     proposal_sub = proposal.add_subparsers(dest="kind", required=True)
     for kind in ("publication", "memo"):
@@ -38,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "app-contribution":
+            code, response = handle_request(json.load(sys.stdin))
+            sys.stdout.write(dump_json(response))
+            return code
         paths = PersonaPaths.resolve()
         if args.command == "doctor":
             result = paths.doctor()

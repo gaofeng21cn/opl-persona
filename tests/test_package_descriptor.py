@@ -3,6 +3,8 @@ import json
 import tomllib
 from pathlib import Path
 
+from opl_persona.app_contributions import ACTION_CONTRACTS, DATA_CONTRACTS
+
 
 ROOT = Path(__file__).parents[1]
 PLUGIN_ROOT = ROOT / "plugins" / "opl-persona"
@@ -104,3 +106,19 @@ def test_app_contributions_are_role_neutral_and_reference_persona_actions() -> N
     serialized = json.dumps(contributions)
     assert "standard_agent" not in serialized
     assert not ({"component", "code", "path", "url"} & set(contributions))
+
+
+def test_app_contribution_abi_is_package_owned_and_matches_declared_refs() -> None:
+    package = load_json(PACKAGE_PATH)
+    abi = package["codex_surface"]["app_contribution_abi"]
+
+    assert abi == {
+        "schema_version": "opl-package-app-contribution-cli.v1",
+        "transport": "stdin_json_stdout_json",
+        "argv": ["opl-persona", "--json", "app-contribution"],
+        "request_schema": "opl-package-app-contribution-request.v1",
+        "response_schema": "opl-package-app-contribution-response.v1",
+    }
+    contributions = package["app_contributions"]
+    assert {view["data_ref"] for view in contributions["views"]} == set(DATA_CONTRACTS)
+    assert {command["action_ref"] for command in contributions["commands"]} == set(ACTION_CONTRACTS)

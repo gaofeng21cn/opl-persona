@@ -42,7 +42,18 @@
     "plugin_source_path": ".",
     "carrier_source_commit": "79fea261bb3660154346d76819061ca0ad80d300",
     "codex_default_exposure": false,
-    "optional_install_policy": "all_exported_skills"
+    "optional_install_policy": "all_exported_skills",
+    "app_contribution_abi": {
+      "schema_version": "opl-package-app-contribution-cli.v1",
+      "transport": "stdin_json_stdout_json",
+      "argv": [
+        "opl-persona",
+        "--json",
+        "app-contribution"
+      ],
+      "request_schema": "opl-package-app-contribution-request.v1",
+      "response_schema": "opl-package-app-contribution-response.v1"
+    }
   },
   "app_contributions": {
     "schema_version": "opl-app-contributions.v1",
