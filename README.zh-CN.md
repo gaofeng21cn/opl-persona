@@ -1,0 +1,133 @@
+<p align="center">
+  <img src="assets/branding/opl-persona-logo.png" alt="OPL Persona 标志" width="136" />
+</p>
+
+<p align="center">
+  <a href="./README.md">English</a> | <a href="./README.zh-CN.md"><strong>中文</strong></a>
+</p>
+
+# OPL Persona
+
+**为 PI 持续工作而设计、以证据为基础的私人数字分身。**
+
+OPL Persona 让邮件、个人知识、专业背景和公开工作之间保持连贯，但不会把这些内容从原有
+系统中夺走。它把 OPL Relay、Obsidian 知识库和实验室网站提供的证据整理为明确、可审核的
+提案；在用户确认之前，不会改变任何外部系统。
+
+它处理的是会跨越多轮对话持续存在的工作：基于既有往来和关系证据起草邮件，把新发表的
+论文转化为知识库和网站更新，或利用 PI 已有的上下文形成一篇新的技术备忘录。
+
+## Persona 能做什么
+
+- 把邮件、个人知识和网站工作中的证据与上下文组织到一起，但不把原始数据复制成另一套
+  数据库。
+- 维护一个私人、跨领域的通用收件箱，承接需要判断、整理或转化为行动的信息。
+- 为邮件分诊、Obsidian 笔记和网站更新生成带来源引用与策略上下文的可审核提案。
+- 让外部写入仍由原系统负责：Relay 负责邮件事实、草稿、Apple Mail 审核、发送与回执；
+  Obsidian 负责笔记；网站仓库负责发布内容与部署。
+
+Persona 是判断与协调层，不是邮件客户端，不是第二个 Obsidian 知识库，也不是网站内容管理
+系统。
+
+## Profile Workspace
+
+每个数字分身对应一个由用户拥有的 **Profile Workspace（分身工作空间）**。它保存这个人的
+私有资料上下文、偏好、策略、提案状态和模块维护数据。典型结构如下：
+
+```text
+~/OPL/profiles/<profile>/
+├── profile/            # 此人是谁，以及长期有效的资料引用
+├── policies/           # 个人处理规则
+├── context/            # 持续工作的上下文
+├── templates/          # 可复用的个人模板
+├── exports/            # 明确交付给用户的输出
+└── data/
+    ├── relay/          # 邮件证据、草稿、关系记忆和同步状态
+    └── persona/        # 通用收件箱、提案、审批与回执
+```
+
+通过唯一的环境变量 `OPL_PROFILE_WORKSPACE` 选择分身工作空间。未设置时，Persona 默认使用
+`~/OPL/profiles/<user>`。源代码仓库、Codex 插件缓存和 OPL 能力包安装目录只包含代码
+与合同，绝不保存私人邮件、知识库正文、凭据或审批记录。
+
+## 本地开始
+
+克隆仓库，安装开发用命令行工具，并初始化一个分身工作空间：
+
+```bash
+git clone git@github.com:gaofeng21cn/opl-persona.git
+cd opl-persona
+make install-local
+
+export OPL_PROFILE_WORKSPACE="$HOME/OPL/profiles/<profile>"
+opl-persona workspace-init
+opl-persona doctor
+```
+
+`workspace-init` 只创建安全的目录骨架和标记文件，不会导入邮件、复制 Obsidian 库或连接账户。
+私有资源绑定只应写入当前选定的分身工作空间。
+
+完整的提案合同与职责边界见
+[架构指引](./docs/architecture-guidance.md)。
+
+## 在 Codex 中使用
+
+本仓包含一个 Codex 插件载体。Codex 既可以从本地检出目录添加插件市场，也可以从 Git 仓库
+读取。当前插件市场标识为 `opl-persona-local`；Codex 从 Git 拉取时仍使用这个标识。
+
+从本地检出目录安装：
+
+```bash
+codex plugin marketplace add "$(pwd -P)" --json
+codex plugin list --marketplace opl-persona-local --available --json
+codex plugin add opl-persona@opl-persona-local --json
+```
+
+从 Git 安装时，需要使用具有本仓读取权限的凭据：
+
+```bash
+codex plugin marketplace add git@github.com:gaofeng21cn/opl-persona.git --ref main --json
+codex plugin list --marketplace opl-persona-local --available --json
+codex plugin add opl-persona@opl-persona-local --json
+```
+
+安装后请新开一个 Codex 任务，使其加载已安装的插件快照。日常使用时，直接用自然语言
+交代工作即可，插件会路由到能力包声明的动作。它始终先形成提案，不会在没有确认的
+情况下修改邮件、Obsidian 知识库或网站。
+
+若通过 Git 插件市场使用，可先刷新快照，再重新安装插件：
+
+```bash
+codex plugin marketplace upgrade opl-persona-local --json
+codex plugin add opl-persona@opl-persona-local --json
+```
+
+## 当前分发状态
+
+目前有两条不同的分发路径：
+
+| 路径 | 当前状态 | 含义 |
+| --- | --- | --- |
+| Codex 插件 | 已可通过本地检出目录或 Git 插件市场快照安装 | 让 Codex 安装 Persona 的专业能力入口。 |
+| OPL 托管能力包 | 规划中 | 未来由 OPL App 通过统一能力包生命周期完成发现、安装、更新、修复和卸载。 |
+
+GitHub 仓库当前是代码来源和 Codex 插件市场的输入，**尚不是** OPL 托管能力包发布
+通道。因此，现在不能宣称 OPL App 已经可以为 Persona 自动远程安装或更新。目标发布通道将由
+OPL Framework 的仓库索引、不可变能力包载荷、清单与摘要回读共同管理，而不是
+由 Persona 自己实现一套更新器。
+
+详情见[分发说明](./docs/distribution.md)。
+
+## 开发检查
+
+```bash
+python3 -m pytest -q
+actionlint .github/workflows/ci.yml
+```
+
+发布前，维护者还应运行当前 Codex Plugin Creator 提供的官方 `validate_plugin.py`；其安装路径
+不会硬编码到本仓。GitHub Actions 还会在测试之外运行可移植的结构检查。
+
+## 许可证
+
+OPL Persona 采用 [MIT License](./LICENSE)。

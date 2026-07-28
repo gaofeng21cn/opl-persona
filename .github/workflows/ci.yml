@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test and validate Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest pyyaml
+
+      - name: Run test suite
+        run: python -m pytest -q
+
+      - name: Validate JSON and Plugin structure
+        run: |
+          python -m json.tool .agents/plugins/marketplace.json > /dev/null
+          python -m json.tool plugins/opl-persona/.codex-plugin/plugin.json > /dev/null
+          python -m json.tool plugins/opl-persona/opl-package.json > /dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          plugin_root = Path("plugins/opl-persona")
+          plugin = json.loads((plugin_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+          marketplace = json.loads(Path(".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+
+          assert plugin["name"] == "opl-persona"
+          assert plugin["version"]
+          assert (plugin_root / plugin["skills"]).is_dir()
+          assert (plugin_root / "opl-package.json").is_file()
+          assert marketplace["name"] == "opl-persona-local"
+          assert any(item["name"] == "opl-persona" for item in marketplace["plugins"])
+          PY
+
+      - name: Verify user documentation links
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          documents = (
+              Path("README.md"),
+              Path("README.zh-CN.md"),
+              Path("docs/distribution.md"),
+          )
+          link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+          for document in documents:
+              for target in link_pattern.findall(document.read_text(encoding="utf-8")):
+                  target = target.split("#", 1)[0]
+                  if not target or "://" in target or target.startswith("mailto:"):
+                      continue
+                  assert (document.parent / target).exists(), f"{document}: missing {target}"
+          PY
