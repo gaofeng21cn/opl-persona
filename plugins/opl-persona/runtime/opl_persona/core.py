@@ -86,6 +86,7 @@ def _proposal(
     source_refs: list[str],
 ) -> dict[str, Any]:
     return {
+        "schema_version": SCHEMA_VERSION,
         "proposal_id": _proposal_id(kind, input_id, target),
         "proposal_kind": kind,
         "target": target,
