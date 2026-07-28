@@ -36,15 +36,19 @@
       ".codex-plugin/plugin.json",
       "bin/opl-persona",
       "runtime/opl_persona/__init__.py",
+      "runtime/opl_persona/approvals.py",
       "runtime/opl_persona/__main__.py",
       "runtime/opl_persona/app_contributions.py",
+      "runtime/opl_persona/bindings.py",
       "runtime/opl_persona/cli.py",
       "runtime/opl_persona/core.py",
+      "runtime/opl_persona/inbox.py",
       "runtime/opl_persona/obsidian.py",
+      "runtime/opl_persona/obsidian_apply.py",
       "runtime/opl_persona/paths.py",
       "skills/opl-persona/SKILL.md"
     ],
-    "digest": "sha256:0c7d936eeec35164bcda2c3d9ce505b4061ea9658ef38d3820fd6d14cd8785f5"
+    "digest": "sha256:c2b1dac9efa34f321264d2837aec75b510e76c3c0b62414afde7b0858d8b50b0"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
