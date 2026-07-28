@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "source": "first_party",
   "package_role": "framework_capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -34,6 +34,7 @@
     "canonicalization": "ordered_path_nul_file_bytes",
     "paths": [
       ".codex-plugin/plugin.json",
+      "assets/icon.png",
       "bin/opl-persona",
       "runtime/opl_persona/__init__.py",
       "runtime/opl_persona/approvals.py",
@@ -49,7 +50,7 @@
       "runtime/opl_persona/policy.py",
       "skills/opl-persona/SKILL.md"
     ],
-    "digest": "sha256:a433704e03d852c75ec1718c4587df84a065aba7939d13efebbed56c90adff13"
+    "digest": "sha256:b5402c5401853523b0d4b88a2d49761e8375e9256427953c623919d57c67f885"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
