@@ -72,6 +72,41 @@ def test_workspace_init_creates_profile_skeleton(tmp_path: Path) -> None:
     assert (profile / "profile").is_dir()
     assert (profile / "data" / "relay").is_dir()
     assert (profile / "data" / "persona").is_dir()
+    assert (profile / "profile" / "identity.md").is_file()
+    assert (profile / "policies" / "mail-triage.md").is_file()
+    assert (profile / "data" / "persona" / "resource-bindings.json").is_file()
+    assert result["readiness"] == "partial"
+    assert result["created"]
+
+
+def test_workspace_init_does_not_overwrite_profile_templates(tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    paths = PersonaPaths.resolve(environ={"OPL_PROFILE_WORKSPACE": str(profile)})
+    paths.init_workspace()
+    identity = profile / "profile" / "identity.md"
+    identity.write_text("# My identity\n", encoding="utf-8")
+
+    result = paths.init_workspace()
+
+    assert identity.read_text(encoding="utf-8") == "# My identity\n"
+    assert result["created"] == []
+
+
+def test_setup_status_exposes_actionable_steps_before_init(tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    paths = PersonaPaths.resolve(environ={"OPL_PROFILE_WORKSPACE": str(profile)})
+
+    status = paths.setup_status()
+
+    assert status["readiness"] == "unconfigured"
+    assert {step["id"] for step in status["steps"]} == {
+        "workspace",
+        "profile.identity",
+        "profile.preferences",
+        "policy.mail",
+        "binding.obsidian",
+    }
+    assert status["next_actions"][0] == "opl-persona --json setup init"
 
 
 def test_obsidian_note_is_read_only_and_scoped(tmp_path: Path) -> None:

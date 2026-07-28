@@ -1,0 +1,7 @@
+interface:
+  display_name: "OPL Persona"
+  short_description: "Evidence-backed PI context and output proposals"
+  brand_color: "#BE304A"
+  default_prompt: "Use $opl-persona to configure my Profile Workspace and prepare an evidence-backed output proposal."
+policy:
+  allow_implicit_invocation: true

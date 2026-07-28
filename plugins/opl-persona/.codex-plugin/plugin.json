@@ -1,7 +1,7 @@
 {
   "name": "opl-persona",
-  "version": "0.1.4",
-  "description": "Cross-domain PI context and reviewable output proposals for OPL.",
+  "version": "0.2.0",
+  "description": "Evidence-backed PI context and reviewable output proposals for OPL.",
   "author": {
     "name": "OPL"
   },
@@ -11,7 +11,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "OPL Persona",
-    "shortDescription": "A private, evidence-backed PI digital counterpart.",
+    "shortDescription": "Evidence-backed PI context for Codex and OPL.",
     "longDescription": "Coordinate approved personal context across OPL Relay, Obsidian, and the lab website without owning any private source data.",
     "developerName": "OPL",
     "category": "Productivity",
@@ -27,7 +27,8 @@
     "defaultPrompt": [
       "根据一篇论文生成知识库更新和实验室网站更新提案。",
       "把这篇 Obsidian 技术备忘录整理成网站文章和邮件草稿上下文。",
-      "检查所有待审核的 Persona 输出提案。"
+      "检查所有待审核的 Persona 输出提案。",
+      "初始化我的 Profile Workspace 并检查资源绑定。"
     ],
     "brandColor": "#BE304A"
   }

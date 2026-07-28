@@ -7,6 +7,8 @@ contain credentials, tokens, content, or a copy of the authority's data.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -225,6 +227,115 @@ def load_resource_binding(
     if not isinstance(value, Mapping):
         raise KeyError(f"Profile resource binding not found: {selected_id}")
     return ResourceBinding.from_dict(value)
+
+
+def _load_binding_values(workspace: Path) -> dict[str, ResourceBinding]:
+    path = binding_store_path(workspace)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Profile resource binding store not found: {path}") from None
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Profile resource binding store is invalid: {exc}") from exc
+    if not isinstance(payload, Mapping) or payload.get("schema_version") != BINDING_STORE_SCHEMA_VERSION:
+        raise ValueError(f"binding store schema_version must be {BINDING_STORE_SCHEMA_VERSION}")
+    values = payload.get("bindings")
+    if not isinstance(values, Mapping):
+        raise ValueError("binding store bindings must be an object")
+    result: dict[str, ResourceBinding] = {}
+    for binding_id, value in values.items():
+        if not isinstance(binding_id, str) or not isinstance(value, Mapping):
+            raise ValueError("binding store ids and values must be objects")
+        result[_text(binding_id, "binding_id")] = ResourceBinding.from_dict(value)
+    return result
+
+
+def list_resource_bindings(workspace: Path) -> dict[str, ResourceBinding]:
+    """List refs-only bindings for the selected Profile Workspace."""
+
+    return _load_binding_values(workspace)
+
+
+def _save_binding_values(workspace: Path, values: Mapping[str, ResourceBinding]) -> Path:
+    path = binding_store_path(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": BINDING_STORE_SCHEMA_VERSION,
+        "bindings": {
+            binding_id: binding.to_dict()
+            for binding_id, binding in sorted(values.items())
+        },
+    }
+    encoded = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    fd, temporary = tempfile.mkstemp(prefix=".resource-bindings.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    return path
+
+
+def set_resource_binding(
+    workspace: Path,
+    *,
+    binding_id: str,
+    capability_id: str,
+    provider_id: str,
+    resource_ref: str,
+    scopes: list[str] | tuple[str, ...],
+    policy: Mapping[str, Any] | None = None,
+) -> ResourceBinding:
+    """Create or replace one refs-only binding in the Profile Workspace."""
+
+    selected_id = _text(binding_id, "binding_id")
+    binding = binding_for_resource(
+        capability_id=capability_id,
+        provider_id=provider_id,
+        resource_ref=resource_ref,
+        scopes=scopes,
+        policy=policy,
+    )
+    values = _load_binding_values(workspace) if binding_store_path(workspace).exists() else {}
+    values[selected_id] = binding
+    _save_binding_values(workspace, values)
+    return binding
+
+
+def check_resource_binding(
+    workspace: Path,
+    binding_id: str,
+) -> dict[str, Any]:
+    """Check a binding's local root without reading its content."""
+
+    binding = load_resource_binding(workspace, binding_id)
+    payload: dict[str, Any] = {
+        "binding_id": _text(binding_id, "binding_id"),
+        "provider_id": binding.provider_id,
+        "capability_id": binding.capability_id,
+        "resource_ref": binding.resource_ref,
+        "scopes": list(binding.scopes),
+        "status": "unknown",
+    }
+    if binding.provider_id == "obsidian":
+        try:
+            root = binding_file_root(
+                binding,
+                provider_id="obsidian",
+                capability_ids={"knowledge.obsidian.v1", "knowledge.documents.v1"},
+                required_scope="notes.read",
+            )
+        except (OSError, ValueError) as exc:
+            payload.update(status="unavailable", reason=str(exc))
+        else:
+            payload.update(status="healthy", root_exists=root.is_dir())
+    else:
+        payload["reason"] = "provider_probe_not_configured"
+    return payload
 
 
 def binding_file_root(

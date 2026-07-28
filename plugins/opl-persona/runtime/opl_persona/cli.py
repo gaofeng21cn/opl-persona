@@ -17,7 +17,12 @@ from .core import (
 )
 from .paths import PersonaPaths
 from .obsidian import memo_proposals_from_file
-from .bindings import DEFAULT_OBSIDIAN_BINDING_ID
+from .bindings import (
+    DEFAULT_OBSIDIAN_BINDING_ID,
+    check_resource_binding,
+    list_resource_bindings,
+    set_resource_binding,
+)
 
 
 def _read_input(path: str) -> dict[str, Any]:
@@ -33,6 +38,30 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor")
     sub.add_parser("workspace-init")
+    setup = sub.add_parser("setup", help="检查或初始化 Profile Workspace")
+    setup_actions = setup.add_subparsers(dest="setup_action", required=True)
+    setup_status = setup_actions.add_parser("status", help="显示首次配置步骤")
+    setup_status.set_defaults(setup_handler="status")
+    setup_init = setup_actions.add_parser("init", help="创建缺失的 Profile 模板")
+    setup_init.set_defaults(setup_handler="init")
+    binding = sub.add_parser("binding", help="管理 Profile Workspace 资源绑定")
+    binding_actions = binding.add_subparsers(dest="binding_action", required=True)
+    binding_list = binding_actions.add_parser("list", help="列出 refs-only 绑定")
+    binding_list.set_defaults(binding_handler="list")
+    binding_set = binding_actions.add_parser("set", help="绑定一个本地资源目录")
+    binding_set.add_argument("--id", required=True, dest="binding_id")
+    binding_set.add_argument("--provider", required=True, choices=["obsidian"])
+    binding_set.add_argument("--path", required=True, help="资源目录；只保存为 file URI")
+    binding_set.add_argument(
+        "--capability-id",
+        default="knowledge.obsidian.v1",
+        choices=["knowledge.obsidian.v1", "knowledge.documents.v1"],
+    )
+    binding_set.add_argument("--scope", action="append", default=["notes.read"])
+    binding_set.set_defaults(binding_handler="set")
+    binding_check = binding_actions.add_parser("check", help="检查绑定目录是否可用")
+    binding_check.add_argument("--id", required=True, dest="binding_id")
+    binding_check.set_defaults(binding_handler="check")
     sub.add_parser(
         "app-contribution",
         help="Serve the Package-owned app contribution JSON ABI.",
@@ -64,6 +93,38 @@ def main(argv: list[str] | None = None) -> int:
             result = paths.doctor()
         elif args.command == "workspace-init":
             result = paths.init_workspace()
+        elif args.command == "setup":
+            result = (
+                paths.setup_status()
+                if args.setup_handler == "status"
+                else paths.init_workspace()
+            )
+            result = {"ok": True, "setup": result}
+        elif args.command == "binding":
+            if args.binding_handler == "list":
+                result = {
+                    "ok": True,
+                    "bindings": {
+                        binding_id: binding.to_dict()
+                        for binding_id, binding in list_resource_bindings(paths.workspace).items()
+                    },
+                }
+            elif args.binding_handler == "check":
+                result = {"ok": True, "binding": check_resource_binding(paths.workspace, args.binding_id)}
+            else:
+                resource = Path(args.path).expanduser().resolve()
+                if not resource.is_dir():
+                    raise ValueError(f"binding path must be an existing directory: {resource}")
+                binding = set_resource_binding(
+                    paths.workspace,
+                    binding_id=args.binding_id,
+                    capability_id=args.capability_id,
+                    provider_id=args.provider,
+                    resource_ref=resource.as_uri(),
+                    scopes=tuple(dict.fromkeys(args.scope)),
+                    policy={"approval_required": True},
+                )
+                result = {"ok": True, "binding": binding.to_dict()}
         elif args.kind == "publication":
             result = build_publication_proposals(_read_input(args.input))
         elif args.kind == "memo":

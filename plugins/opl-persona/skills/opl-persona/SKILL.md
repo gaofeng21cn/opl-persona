@@ -21,6 +21,36 @@ authority of mail, Obsidian, or `gflab_web`.
 - Never put mail databases, raw mail, Obsidian paths/content, website checkout
   state, credentials, or approvals into the plugin cache or source checkout.
 
+## First use
+
+When the user asks to start Persona, configure a new profile, or reports that
+the workspace is not ready, run:
+
+```bash
+opl-persona --json setup status
+opl-persona --json setup init
+```
+
+`setup init` is idempotent and only creates missing profile templates. Ask the
+user to fill `profile/identity.md`, then configure the knowledge binding with:
+
+```bash
+opl-persona --json binding set \
+  --id my-knowledge --provider obsidian --path "/path/to/Obsidian"
+opl-persona --json binding check --id my-knowledge
+```
+
+The binding command stores only a local `file:` reference and scopes. It does
+not read the vault or copy its content. For mail, hand the same selected
+`OPL_PROFILE_WORKSPACE` to OPL Relay and let Relay initialize the account
+configuration and Keychain credential; Persona must not write Relay state.
+Finish first-run work by running `setup status` again and report each step,
+including any delegated Relay step, before drafting.
+
+Prefer the installed OPL Package contribution command when OPL App exposes it.
+If the Package is not discovered yet, the plugin's own `bin/opl-persona`
+launcher is a self-contained fallback for the same JSON ABI.
+
 ## Proposal workflow
 
 1. Normalize the input into one strict JSON object with all declared evidence

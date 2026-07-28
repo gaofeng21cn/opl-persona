@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "source": "first_party",
   "package_role": "framework_capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -48,9 +48,10 @@
       "runtime/opl_persona/obsidian_apply.py",
       "runtime/opl_persona/paths.py",
       "runtime/opl_persona/policy.py",
-      "skills/opl-persona/SKILL.md"
+      "skills/opl-persona/SKILL.md",
+      "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:b5402c5401853523b0d4b88a2d49761e8375e9256427953c623919d57c67f885"
+    "digest": "sha256:97e00b86d8fb9430b0c56a6c7b814b8bde24c1e000e1ee53f23b7ac271db98d2"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

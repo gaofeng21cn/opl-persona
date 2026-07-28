@@ -8,7 +8,7 @@
 
 # OPL Persona
 
-**A private, evidence-backed digital counterpart for a PI's ongoing work.**
+**An evidence-backed digital counterpart for a PI's ongoing work.**
 
 OPL Persona helps one person keep mail, knowledge, professional context, and
 public-facing work connected without taking ownership away from the systems
@@ -71,13 +71,22 @@ cd opl-persona
 make install-local
 
 export OPL_PROFILE_WORKSPACE="$HOME/OPL/profiles/<profile>"
-opl-persona workspace-init
-opl-persona doctor
+opl-persona --json setup init
+opl-persona --json setup status
 ```
 
-`workspace-init` creates the safe directory skeleton and marker. It does not
-import mail, copy an Obsidian vault, or connect an account. Configure private
-resource bindings only inside the selected Profile Workspace.
+`setup init` is idempotent and creates missing templates without overwriting
+user content. Fill `profile/identity.md`, then bind the Obsidian vault by
+storing only a local reference:
+
+```bash
+opl-persona --json binding set \
+  --id my-knowledge --provider obsidian --path "/path/to/Obsidian"
+opl-persona --json binding check --id my-knowledge
+```
+
+Persona does not read the vault during binding setup. Configure mail separately
+with OPL Relay using the same Profile Workspace.
 
 For the complete proposal contract and owner boundaries, see
 [Architecture Guidance](./docs/architecture-guidance.md).
@@ -96,10 +105,10 @@ codex plugin list --marketplace opl-persona --available --json
 codex plugin add opl-persona@opl-persona --json
 ```
 
-From Git, using credentials that can read this repository:
+From GitHub:
 
 ```bash
-codex plugin marketplace add git@github.com:gaofeng21cn/opl-persona.git --ref main --json
+codex plugin marketplace add https://github.com/gaofeng21cn/opl-persona.git --ref main --json
 codex plugin list --marketplace opl-persona --available --json
 codex plugin add opl-persona@opl-persona --json
 ```

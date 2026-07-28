@@ -8,7 +8,7 @@
 
 # OPL Persona
 
-**为 PI 持续工作而设计、以证据为基础的私人数字分身。**
+**为 PI 持续工作而设计、以证据为基础的数字分身。**
 
 OPL Persona 让邮件、个人知识、专业背景和公开工作之间保持连贯，但不会把这些内容从原有
 系统中夺走。它把 OPL Relay、Obsidian 知识库和实验室网站提供的证据整理为明确、可审核的
@@ -60,12 +60,21 @@ cd opl-persona
 make install-local
 
 export OPL_PROFILE_WORKSPACE="$HOME/OPL/profiles/<profile>"
-opl-persona workspace-init
-opl-persona doctor
+opl-persona --json setup init
+opl-persona --json setup status
 ```
 
-`workspace-init` 只创建安全的目录骨架和标记文件，不会导入邮件、复制 Obsidian 库或连接账户。
-私有资源绑定只应写入当前选定的分身工作空间。
+`setup init` 可以重复运行，只创建缺失模板，不会覆盖已有内容。请先填写
+`profile/identity.md`，再把 Obsidian 知识库绑定到当前工作空间：
+
+```bash
+opl-persona --json binding set \
+  --id my-knowledge --provider obsidian --path "/path/to/Obsidian"
+opl-persona --json binding check --id my-knowledge
+```
+
+绑定时 Persona 不会读取知识库正文，只保存本机资源引用。邮件配置由 OPL Relay
+使用同一个分身工作空间单独完成。
 
 完整的提案合同与职责边界见
 [架构指引](./docs/architecture-guidance.md)。
@@ -83,10 +92,10 @@ codex plugin list --marketplace opl-persona --available --json
 codex plugin add opl-persona@opl-persona --json
 ```
 
-从 Git 安装时，需要使用具有本仓读取权限的凭据：
+从 GitHub 安装：
 
 ```bash
-codex plugin marketplace add git@github.com:gaofeng21cn/opl-persona.git --ref main --json
+codex plugin marketplace add https://github.com/gaofeng21cn/opl-persona.git --ref main --json
 codex plugin list --marketplace opl-persona --available --json
 codex plugin add opl-persona@opl-persona --json
 ```
