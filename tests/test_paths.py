@@ -37,6 +37,21 @@ def test_paths_share_profile_workspace_when_selected(tmp_path: Path) -> None:
     assert paths.data_root == profile / "data" / "persona"
 
 
+def test_paths_never_use_legacy_persona_home_as_fallback(monkeypatch, tmp_path: Path) -> None:
+    from opl_persona import paths as paths_module
+
+    home = tmp_path / "home"
+    legacy = home / ".opl-persona"
+    legacy.mkdir(parents=True)
+    monkeypatch.setattr(paths_module.Path, "home", staticmethod(lambda: home))
+
+    paths = PersonaPaths.resolve(environ={})
+
+    assert paths.workspace == home / "OPL" / "profiles" / home.name
+    assert paths.data_root == paths.workspace / "data" / "persona"
+    assert paths.data_root != legacy
+
+
 def test_workspace_init_creates_profile_skeleton(tmp_path: Path) -> None:
     profile = tmp_path / "profile"
     paths = PersonaPaths.resolve(environ={"OPL_PROFILE_WORKSPACE": str(profile)})

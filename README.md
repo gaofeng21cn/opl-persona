@@ -24,3 +24,10 @@ Obsidian memo      -> website article proposal + Relay mail draft context
 
 Every external write is a proposal until the user approves it. The package,
 plugin, and source checkout never contain private data.
+
+Private mail judgment rules live as Markdown under the configured Profile
+Workspace (`$OPL_PROFILE_WORKSPACE/policies/`). Persona loads those rules and
+records a content digest in each `mail.triage` proposal; OPL Relay remains the
+mail fact, draft, send, and receipt authority. See
+[`docs/mail-policy.md`](docs/mail-policy.md) for the boundary and routing
+contract.

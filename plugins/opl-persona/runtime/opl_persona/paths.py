@@ -32,8 +32,7 @@ class PersonaPaths:
         env = os.environ if environ is None else environ
         data = env.get(PERSONA_HOME_ENV, "").strip()
         if not data:
-            legacy = Path.home() / ".opl-persona"
-            data = str(legacy if legacy.exists() else default_profile_workspace(env) / "data" / "persona")
+            data = str(default_profile_workspace(env) / "data" / "persona")
         workspace = env.get(PERSONA_WORKSPACE_ENV, "").strip()
         if not workspace:
             workspace = str(default_profile_workspace(env))

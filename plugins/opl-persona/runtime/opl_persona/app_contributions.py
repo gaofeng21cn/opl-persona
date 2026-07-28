@@ -61,13 +61,36 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
             "source_refs": {"type": "string_list", "required": True},
             "subject": {"type": "string", "required": True},
             "summary": {"type": "string", "required": True},
-            "classification": {"type": "string", "required": True},
-            "priority": {"type": "string", "required": True},
-            "rationale": {"type": "string", "required": True},
-            "uncertainty": {"type": "string", "required": True},
-            "recommended_action": {"type": "string", "required": True},
-            "policy_refs": {"type": "string_list", "required": True},
-            "policy_digest": {"type": "string", "required": True},
+            "from": {"type": "string", "required": False},
+            "sender": {"type": "string", "required": False},
+            "body": {"type": "string", "required": False},
+            "snippet": {"type": "string", "required": False},
+            "to": {"type": "string_list", "required": False},
+            "cc": {"type": "string_list", "required": False},
+            "bcc": {"type": "string_list", "required": False},
+            "user_addresses": {"type": "string_list", "required": False},
+            "my_addresses": {"type": "string_list", "required": False},
+            "user_email": {"type": "string", "required": False},
+            "first_author": {"type": "address", "required": False},
+            "actual_first_author": {"type": "address", "required": False},
+            "article_first_author": {"type": "address", "required": False},
+            "team_members": {"type": "record_list", "required": False},
+            "lab_members": {"type": "record_list", "required": False},
+            "current_follow_up": {"type": "address", "required": False},
+            "followed_up_by": {"type": "address", "required": False},
+            "follow_up_by": {"type": "address", "required": False},
+            "classification": {"type": "string", "required": False},
+            "priority": {"type": "string", "required": False},
+            "rationale": {"type": "string", "required": False},
+            "uncertainty": {"type": "string", "required": False},
+            "recommended_action": {"type": "string", "required": False},
+            "policy_refs": {"type": "string_list", "required": False},
+            "policy_digest": {"type": "string", "required": False},
+            "persona_policy_digest": {"type": "string", "required": False},
+            "relay_policy_digest": {"type": "string", "required": False},
+            "policy_digest_kind": {"type": "string", "required": False},
+            "policy_workspace": {"type": "string", "required": False},
+            "policy_paths": {"type": "string_list", "required": False},
         },
         "result": "communications.mail.v1#triage.propose.result",
     },
@@ -165,6 +188,15 @@ def _validate_input(value: dict[str, object], contract: dict[str, Any]) -> None:
                 or not all(isinstance(item, str) and item.strip() for item in field_value)
             ):
                 raise ValueError(f"input.{name} must be a list of non-empty strings")
+        elif field_type == "record_list":
+            if (
+                not isinstance(field_value, list)
+                or not all(isinstance(item, (dict, str)) for item in field_value)
+            ):
+                raise ValueError(f"input.{name} must be a list of objects or strings")
+        elif field_type == "address":
+            if not isinstance(field_value, (dict, str)):
+                raise ValueError(f"input.{name} must be an address object or string")
         elif field_type == "object":
             if not isinstance(field_value, dict):
                 raise ValueError(f"input.{name} must be an object")

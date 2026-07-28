@@ -204,6 +204,43 @@ def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsy
         assert all(item["approval"]["external_write_allowed"] is False for item in bundle["proposals"])
 
 
+def test_mail_triage_app_action_accepts_markdown_policy_and_recipient_evidence(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    policy = tmp_path / "policies" / "mail-triage.md"
+    policy.parent.mkdir(parents=True)
+    policy.write_text("# Mail rules\n\n投稿论文优先。", encoding="utf-8")
+    email_ref = "email-store://account/inbox/456"
+    code, response = run_cli(
+        monkeypatch,
+        capsys,
+        {
+            "schema_version": REQUEST_SCHEMA,
+            "operation": "execute",
+            "ref": "communications.mail.v1#triage.propose",
+            "input": {
+                "email_ref": email_ref,
+                "source_refs": [email_ref],
+                "subject": "Manuscript revision",
+                "summary": "A revision deadline needs attention.",
+                "policy_workspace": str(tmp_path),
+                "to": ["gaof57@mail.sysu.edu.cn"],
+                "cc": [],
+                "bcc": [],
+                "user_addresses": ["gaof57@mail.sysu.edu.cn"],
+                "actual_first_author": {"email": "student@example.edu"},
+                "team_members": [{"email": "student@example.edu"}],
+            },
+        },
+    )
+
+    assert code == 0
+    assert response["ok"] is True
+    triage = response["result"]["proposal_bundle"]["proposals"][1]
+    assert triage["policy_digest"].startswith("sha256:")
+    assert triage["payload"]["forward_to"]["email"] == "student@example.edu"
+
+
 def test_execute_rejects_undeclared_proposal_input_fields(monkeypatch, capsys) -> None:
     code, response = run_cli(
         monkeypatch,

@@ -129,6 +129,22 @@ def test_mail_triage_captures_personal_inbox_and_policy_bound_decision() -> None
         ),
         (
             {
+                "email_ref": "email-store://account",
+                "source_refs": ["email-store://account"],
+                "subject": "Review request",
+                "summary": "Summary",
+                "classification": "needs_decision",
+                "priority": "high",
+                "rationale": "Reason",
+                "uncertainty": "Unknown",
+                "recommended_action": "Read",
+                "policy_refs": ["policy://persona/mail-triage/v1"],
+                "policy_digest": sha256("b"),
+            },
+            "email-store",
+        ),
+        (
+            {
                 "email_ref": "email-store://account/inbox/123",
                 "source_refs": ["email-store://account/inbox/123"],
                 "subject": "Review request",

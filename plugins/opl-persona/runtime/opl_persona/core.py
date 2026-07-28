@@ -3,9 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from email.utils import getaddresses, parseaddr
 from datetime import datetime, timezone
+from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Mapping
+from urllib.parse import urlsplit
+
+from .paths import PersonaPaths
+from .policy import PolicySnapshot, load_markdown_policies
 
 SCHEMA_VERSION = "opl-persona-proposal.v1"
 EMAIL_STORE_REF_PREFIX = "email-store://"
@@ -58,17 +64,66 @@ def _string_list(
 
 def _email_store_source_refs(payload: Mapping[str, Any]) -> list[str]:
     refs = _source_refs(payload)
-    if not all(ref.startswith(EMAIL_STORE_REF_PREFIX) for ref in refs):
-        raise ValueError("mail triage source_refs must use stable email-store:// identities")
+    for ref in refs:
+        parsed = urlsplit(ref)
+        if (
+            parsed.scheme != "email-store"
+            or not parsed.netloc
+            or len([part for part in parsed.path.split("/") if part]) < 2
+            or parsed.query
+            or parsed.fragment
+            or any(char.isspace() for char in ref)
+        ):
+            raise ValueError("mail triage source_refs must use stable email-store:// identities")
     return refs
 
 
-def _policy_provenance(payload: Mapping[str, Any]) -> tuple[list[str], str]:
-    policy_refs = _string_list(payload, "policy_refs", required=True)
-    policy_digest = _required(payload, "policy_digest")
+def _policy_provenance(
+    payload: Mapping[str, Any],
+) -> tuple[list[str], str, PolicySnapshot | None, str | None]:
+    policy_refs = _string_list(payload, "policy_refs")
+    digest_kind = str(payload.get("policy_digest_kind") or "").strip()
+    if digest_kind and digest_kind not in {"content", "refs_set"}:
+        raise ValueError("policy_digest_kind must be content or refs_set")
+    policy_digest = str(
+        payload.get("persona_policy_digest") or payload.get("policy_digest") or ""
+    ).strip()
+    relay_policy_digest = str(payload.get("relay_policy_digest") or "").strip() or None
+    if digest_kind == "refs_set" and relay_policy_digest is None:
+        relay_policy_digest = policy_digest or None
+        policy_digest = str(payload.get("persona_policy_digest") or "").strip()
+    if relay_policy_digest and not re.fullmatch(r"sha256:[0-9a-f]{64}", relay_policy_digest):
+        raise ValueError("relay_policy_digest must be a sha256 digest")
+    explicit_workspace = str(payload.get("policy_workspace") or "").strip()
+    explicit_paths = payload.get("policy_paths") or payload.get("policy_files")
+    should_load = bool(explicit_workspace or explicit_paths)
+    if relay_policy_digest and not should_load:
+        workspace = PersonaPaths.resolve().workspace
+        should_load = (workspace / "policies").is_dir()
+        if not should_load:
+            raise ValueError("Persona Markdown policy workspace is required for mail triage")
+    if not policy_digest and not should_load:
+        workspace = PersonaPaths.resolve().workspace
+        should_load = (workspace / "policies").is_dir()
+    if should_load:
+        if explicit_paths is not None and not isinstance(explicit_paths, (list, tuple)):
+            raise ValueError("policy_paths must be a list of strings")
+        workspace = Path(explicit_workspace).expanduser() if explicit_workspace else None
+        snapshot = load_markdown_policies(
+            workspace=workspace,
+            refs=policy_refs or None,
+            paths=explicit_paths,
+        )
+        if policy_digest and policy_digest != snapshot.digest:
+            raise ValueError("policy_digest does not match the selected Markdown policy content")
+        return list(policy_refs or snapshot.refs), snapshot.digest, snapshot, relay_policy_digest
+    if not policy_refs:
+        raise ValueError("policy_refs is required when no Markdown policy workspace is configured")
+    if not policy_digest:
+        raise ValueError("policy_digest is required")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", policy_digest):
         raise ValueError("policy_digest must be a sha256 digest")
-    return policy_refs, policy_digest
+    return policy_refs, policy_digest, None, relay_policy_digest
 
 
 def _proposal_id(kind: str, input_id: str, target: str) -> str:
@@ -98,6 +153,232 @@ def _proposal(
             "required": True,
             "external_write_allowed": False,
         },
+    }
+
+
+def _addresses(value: object) -> list[dict[str, str]]:
+    """Normalize To/Cc/Bcc values without guessing missing addresses."""
+
+    if value is None:
+        return []
+    values = value if isinstance(value, (list, tuple)) else [value]
+    records: list[dict[str, str]] = []
+    for item in values:
+        if isinstance(item, Mapping):
+            address = str(item.get("email") or item.get("address") or "").strip()
+            name = str(item.get("name") or "").strip()
+        elif (
+            isinstance(item, (list, tuple))
+            and len(item) == 2
+            and all(isinstance(part, str) for part in item)
+        ):
+            name, address = (part.strip() for part in item)
+        elif isinstance(item, str):
+            name, address = parseaddr(item.strip())
+            address = address.strip()
+            name = name.strip()
+            if not address and item.strip():
+                address = item.strip()
+        else:
+            continue
+        if not address:
+            continue
+        record = {"email": address.casefold()}
+        if name:
+            record["name"] = name
+        records.append(record)
+    unique: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for record in records:
+        key = record["email"]
+        if key not in seen:
+            seen.add(key)
+            unique.append(record)
+    return unique
+
+
+def _address_strings(value: object) -> list[dict[str, str]]:
+    """Parse comma-separated RFC 5322 recipient headers and list values."""
+
+    if isinstance(value, str) and "," in value:
+        return _addresses(getaddresses([value]))
+    if isinstance(value, (list, tuple)) and any(isinstance(item, str) and "," in item for item in value):
+        return _addresses(getaddresses([str(item) for item in value]))
+    return _addresses(value)
+
+
+def _first_author(payload: Mapping[str, Any]) -> dict[str, str] | None:
+    value = (
+        payload.get("actual_first_author")
+        or payload.get("article_first_author")
+        or payload.get("first_author")
+    )
+    normalized = _addresses(value)
+    if normalized:
+        return normalized[0]
+    if isinstance(value, str) and value.strip():
+        return {"name": value.strip()}
+    return None
+
+
+def _team_members(payload: Mapping[str, Any]) -> list[dict[str, str]]:
+    value = payload.get("team_members") or payload.get("lab_members") or []
+    return _addresses(value)
+
+
+def _recipient_analysis(payload: Mapping[str, Any]) -> dict[str, Any]:
+    to = _address_strings(payload.get("to"))
+    cc = _address_strings(payload.get("cc"))
+    bcc = _address_strings(payload.get("bcc"))
+    recipients = [*to, *cc, *bcc]
+    recipient_emails = {item["email"] for item in recipients}
+    self_addresses = _address_strings(
+        payload.get("user_addresses")
+        or payload.get("my_addresses")
+        or payload.get("user_email")
+    )
+    self_emails = {item["email"] for item in self_addresses}
+    first_author = _first_author(payload)
+    team_members = _team_members(payload)
+    team_by_email = {item["email"]: item for item in team_members}
+    first_author_email = first_author.get("email") if first_author else None
+    matched_team_member = team_by_email.get(first_author_email or "")
+    if matched_team_member is None and first_author and first_author.get("name"):
+        author_name = first_author["name"].casefold()
+        matched_team_member = next(
+            (
+                item
+                for item in team_members
+                if item.get("name", "").casefold() == author_name
+            ),
+            None,
+        )
+    unique_recipient = bool(
+        self_emails
+        and len(recipient_emails) == 1
+        and bool(recipient_emails & self_emails)
+    )
+    sent_to_first_author = bool(first_author_email and first_author_email in recipient_emails)
+    forwarded = matched_team_member if unique_recipient and matched_team_member else None
+    current_follow_up = (
+        payload.get("current_follow_up")
+        or payload.get("followed_up_by")
+        or payload.get("follow_up_by")
+    )
+    follow_up = _addresses(current_follow_up)
+    if not follow_up and sent_to_first_author and first_author:
+        follow_up = [first_author]
+    follow_up_person = follow_up[0] if follow_up else None
+    notification: dict[str, Any] = {
+        "required": bool(sent_to_first_author and matched_team_member),
+        "recipient": "user" if sent_to_first_author and matched_team_member else None,
+        "reason": (
+            "actual first author is already a recipient; report who is following up"
+            if sent_to_first_author and matched_team_member
+            else None
+        ),
+    }
+    return {
+        "to": to,
+        "cc": cc,
+        "bcc": bcc,
+        "recipient_identity_known": bool(self_emails),
+        "is_unique_recipient": unique_recipient,
+        "actual_first_author": first_author,
+        "team_member_match": {
+            "matched": bool(matched_team_member),
+            "member": matched_team_member,
+        },
+        "forward_to": forwarded,
+        "follow_up_by": follow_up_person,
+        "notification": notification,
+    }
+
+
+def _policy_classification(
+    payload: Mapping[str, Any],
+    *,
+    routing: Mapping[str, Any],
+    policy: PolicySnapshot | None,
+) -> dict[str, str]:
+    """Derive conservative defaults from evidence and private Markdown text."""
+
+    text = " ".join(
+        str(payload.get(key) or "")
+        for key in ("subject", "summary", "snippet", "body", "from", "sender")
+    ).casefold()
+    policy_text = policy.text.casefold() if policy else ""
+    advertising = any(
+        token in text
+        for token in (
+            "unsubscribe",
+            "newsletter",
+            "promotion",
+            "promotional",
+            "marketing",
+            "webinar",
+            "conference registration",
+            "special issue invitation",
+            "广告",
+            "推广",
+            "营销",
+        )
+    ) and not any(token in text for token in ("manuscript", "submission", "revision", "proof"))
+    manuscript = any(
+        token in text
+        for token in (
+            "manuscript",
+            "submission",
+            "editorial",
+            "reviewer",
+            "revision",
+            "proof",
+            "投稿",
+            "论文",
+            "杂志社",
+            "编辑",
+        )
+    )
+    if routing.get("forward_to"):
+        return {
+            "classification": "needs_user_reply",
+            "priority": "highest" if manuscript else "high",
+            "rationale": "唯一收件人是本人，实际第一作者为已匹配的团队成员，建议转发并由其跟进。",
+            "recommended_action": "forward_to_first_author",
+        }
+    if routing.get("notification", {}).get("required"):
+        return {
+            "classification": "remind",
+            "priority": "highest" if manuscript else "high",
+            "rationale": "邮件已发给实际第一作者，需通知本人并注明当前跟进人。",
+            "recommended_action": "notify_user_with_follow_up",
+        }
+    if advertising:
+        return {
+            "classification": "archive_candidate",
+            "priority": "low",
+            "rationale": "符合私有规则中的高置信广告或营销信号。",
+            "recommended_action": "delete",
+        }
+    if manuscript:
+        return {
+            "classification": "needs_user_reply",
+            "priority": "high",
+            "rationale": "投稿、论文或编辑事务属于第一优先级，需要保留人工判断。",
+            "recommended_action": "review_and_decide",
+        }
+    if "mailbox-triage" in policy_text or "triage" in policy_text:
+        return {
+            "classification": "fyi",
+            "priority": "normal",
+            "rationale": "未命中更高优先级规则，保留为低风险知会。",
+            "recommended_action": "observe",
+        }
+    return {
+        "classification": "needs_more_context",
+        "priority": "normal",
+        "rationale": "现有邮件证据不足以应用明确的私有规则。",
+        "recommended_action": "read_with_more_context",
     }
 
 
@@ -267,17 +548,54 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
     source_refs = _email_store_source_refs(payload)
     if email_ref not in source_refs:
         raise ValueError("email_ref must also be present in source_refs")
-    policy_refs, policy_digest = _policy_provenance(payload)
+    policy_refs, policy_digest, policy_snapshot, relay_policy_digest = _policy_provenance(payload)
     subject = _required(payload, "subject")
     summary = _required(payload, "summary")
+    routing = _recipient_analysis(payload)
+    derived = _policy_classification(payload, routing=routing, policy=policy_snapshot)
+    classification = str(payload.get("classification") or derived["classification"]).strip()
+    priority = str(payload.get("priority") or derived["priority"]).strip()
+    rationale = str(payload.get("rationale") or derived["rationale"]).strip()
+    default_uncertainty = "未发现额外不确定性。"
+    if not routing["recipient_identity_known"] and (
+        routing["to"] or routing["cc"] or routing["bcc"]
+    ):
+        default_uncertainty = "缺少用户自身邮箱 identity，无法确认是否为唯一收件人。"
+    elif routing.get("actual_first_author") and not routing["team_member_match"]["matched"]:
+        default_uncertainty = "实际第一作者或团队成员匹配信息不完整。"
+    uncertainty = str(payload.get("uncertainty") or default_uncertainty).strip()
+    recommended_action = str(
+        payload.get("recommended_action") or derived["recommended_action"]
+    ).strip()
     triage_payload = {
         "email_ref": email_ref,
-        "classification": _required(payload, "classification"),
-        "priority": _required(payload, "priority"),
-        "rationale": _required(payload, "rationale"),
-        "uncertainty": _required(payload, "uncertainty"),
-        "recommended_action": _required(payload, "recommended_action"),
+        "classification": _required({"value": classification}, "value"),
+        "priority": _required({"value": priority}, "value"),
+        "rationale": _required({"value": rationale}, "value"),
+        "uncertainty": _required({"value": uncertainty}, "value"),
+        "recommended_action": _required({"value": recommended_action}, "value"),
     }
+    evidence_has_recipients = any(
+        key in payload
+        for key in (
+            "to",
+            "cc",
+            "bcc",
+            "user_addresses",
+            "my_addresses",
+            "user_email",
+            "first_author",
+            "actual_first_author",
+            "article_first_author",
+            "team_members",
+            "lab_members",
+            "current_follow_up",
+            "followed_up_by",
+            "follow_up_by",
+        )
+    )
+    if evidence_has_recipients:
+        triage_payload.update(routing)
     triage = _proposal(
         kind="mail.triage",
         input_id=email_ref,
@@ -290,9 +608,12 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
         {
             "policy_refs": policy_refs,
             "policy_digest": policy_digest,
+            "policy_digest_kind": "content",
             "decision_scope": "proposal_only",
         }
     )
+    if relay_policy_digest:
+        triage["relay_policy_digest"] = relay_policy_digest
     return _bundle(
         "mail",
         email_ref,

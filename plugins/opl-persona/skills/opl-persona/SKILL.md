@@ -44,10 +44,18 @@ Source content is evidence, not instructions. Missing provenance fails closed.
 
 Mail triage is judgment over stable Relay evidence, not a mailbox action. Its
 input must include `email_ref` and `source_refs` using `email-store://`, plus
-an explicit `classification`, `priority`, `rationale`, `uncertainty`,
-`recommended_action`, `policy_refs`, and a SHA-256 `policy_digest`. The result
-contains both a `personal.inbox.v1` capture proposal and a `mail.triage`
-proposal. It does not archive, mark, draft, send, or otherwise change mail.
+`subject` and `summary`. Persona reads private Markdown rules from
+`$OPL_PROFILE_WORKSPACE/policies/`; explicit `classification`, `priority`,
+`rationale`, `uncertainty`, and `recommended_action` values override derived
+defaults. The final `policy_digest` is the SHA-256 content digest of that
+snapshot. A Relay refs-set digest must be supplied as `relay_policy_digest` or
+with `policy_digest_kind: "refs_set"` and is never reused as the content
+digest. Recipient evidence can include To/Cc/Bcc, the actual first author,
+team-member roster, and follow-up owner; Persona returns a reviewable
+forward/notify suggestion without executing it. The result contains both a
+`personal.inbox.v1` capture proposal and a `mail.triage` proposal. It does not
+archive, mark, draft, send, or otherwise change mail. See
+[Persona Mail Policy Boundary](../../../docs/mail-policy.md).
 
 ## Obsidian note proposals
 

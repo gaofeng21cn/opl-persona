@@ -36,13 +36,20 @@ change, sent email, or written vault note.
 ## Inbox and Obsidian proposal contracts
 
 `mail.triage` is a policy-bound interpretation of one or more stable
-`email-store://` source references. It records a classification, priority,
-rationale, uncertainty, recommended action, policy references, and an exact
-policy digest. It also emits a generic `personal.inbox.v1` capture for Persona's
+`email-store://` source references. Persona loads the user's private Markdown
+rules from `OPL_PROFILE_WORKSPACE/policies/` and hashes the selected file bytes,
+not merely a list of policy refs. It records a classification, priority,
+rationale, uncertainty, recommended action, policy references, and a content
+`policy_digest`. Recipient evidence (`to`, `cc`, `bcc`), unique-recipient
+status, actual first-author and team-member matching, forwarding target,
+follow-up owner, and notification suggestion are included when supplied by the
+mail authority. A Relay refs-set digest is retained only as
+`relay_policy_digest` provenance and never becomes Persona's content digest.
+The proposal also emits a generic `personal.inbox.v1` capture for Persona's
 private staging provider. The Inbox stores only source refs, a bounded summary,
 state, and owner routes; it does not copy the mail body. An App may project that
-staging without becoming a second mailbox. Missing mail or policy provenance
-fails closed.
+staging without becoming a second mailbox. Missing mail, policy, or identity
+provenance fails closed.
 
 `knowledge.obsidian.note.v1` is a proposal for exactly one relative Markdown
 target path. It carries frontmatter, body, links, tags, evidence references,

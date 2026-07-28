@@ -207,7 +207,12 @@ For an inbox decision, Persona also requires a stable `email-store://`
 evidence reference and the policy evidence used to make the recommendation.
 The resulting `mail.triage` proposal contains classification, priority,
 rationale, uncertainty, recommended action, `policy_refs`, and a SHA-256
-`policy_digest`; its companion `personal.inbox.v1` capture进入 Persona 私有 staging。
+content `policy_digest` computed from the selected Persona-workspace Markdown
+bytes; its companion `personal.inbox.v1` capture进入 Persona 私有 staging。
+Relay may include a separate refs-set `relay_policy_digest` as bridge
+provenance, but Persona must reload its own Markdown rules before creating the
+final content digest. Recipient routing evidence can include To/Cc/Bcc,
+actual first author, team-member match, forwarding target, and follow-up owner.
 该 staging 只保存 source refs、有界摘要、状态与路由，不复制邮件正文，因此不会成为
 第二邮箱。完整条目和 Binding 合同见
 [Composable Capability and Integration Model](integration-capability-composition.md)。
