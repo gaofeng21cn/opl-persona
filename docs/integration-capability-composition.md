@@ -65,6 +65,32 @@ Capability ID 是稳定语义，不绑定文件路径、网站框架、邮箱客
 `gflab_web` 将来更换生成器或托管平台，只要 adapter 继续满足
 `publishing.site.v1`，Persona Recipe 无需变化。
 
+### 现有 ID 的兼容与迁移
+
+通用 Capability ID 是长期合同；现有 provider-specific ID 和 action ref 是兼容入口，
+不能被 App 或 Persona 静默改写：
+
+| 长期 Capability ID | 当前兼容 ID / ref | 迁移含义 |
+| --- | --- | --- |
+| `knowledge.documents.v1` | `knowledge.obsidian.v1`、`knowledge.obsidian.v1#note.propose` | Obsidian 是首个 Provider；Recipe 与 Binding 使用通用 ID，resolver 返回 Provider 实际 action ref |
+| `publishing.site.v1` | `website.publication.v1` 与现有 `gflab_web` proposal type | `gflab_web` 是首个 Provider；网站 proposal schema 不因 Capability 泛化而强制改名 |
+| `communications.mail.v1` | 同名现有 Relay refs | 已是通用 ID，无需别名 |
+| `personal.inbox.v1` | 同名现有 Persona ref | 已是通用 ID，无需别名 |
+
+Capability ID、provider action ref 和 proposal artifact schema 是三类 identity：
+
+- Recipe 与 Resource Binding 只依赖通用 Capability ID；
+- Provider 声明自己实现的通用 Capability，并返回其可调用的 opaque action ref；
+- proposal schema 可以保留更具体的目标语义，例如 `knowledge.obsidian.note.v1`，不能被
+  当作另一个 Capability ID。
+
+迁移按以下顺序进行：
+
+1. Provider 先同时声明通用 Capability 与 legacy alias，并保持旧 action ref 可调用；
+2. 新 Recipe、Binding 与 App projection 只写通用 ID，但执行时使用 Provider 返回的 ref；
+3. consumer-zero 与 installed/effective readback 均证明旧 ID 无调用者后，才移除 alias；
+4. 已发布 ID 永不改作其他语义。迁移期间不得让 App 维护第二份硬编码 alias 表。
+
 第一版统一操作词汇只有：
 
 ```text
@@ -85,17 +111,41 @@ Provider Adapter 隔离具体工具和工作流。例如网站 adapter 可以使
 站点 API 或浏览器，但 Persona 只依赖 `publishing.site.v1`。浏览器、Office 工具和邮件
 客户端是执行 surface，不是新的 domain authority。
 
-Resource Binding 把 Provider 连接到用户的真实资源，至少记录：
+Resource Binding 把 Provider 连接到用户的真实资源。最小私有配置合同为：
 
-```text
-binding_id
-capability_id
-provider_id
-resource_ref
-allowed_scopes
-approval_policy_ref
-health / currentness
+```yaml
+schema_version: opl-persona-resource-binding.v1
+binding_id: my-knowledge
+capability_id: knowledge.documents.v1
+provider_id: obsidian
+resource_ref: vault-ref://personal
+allowed_operations: [read, search, propose, apply_approved, readback]
+allowed_scopes: [notes/technical-memos]
+approval_policy_ref: persona-policy://knowledge-write-v1
+credential_ref: null
+enabled: true
 ```
+
+`capability_id` 必须是通用 ID；`resource_ref` 与可选 `credential_ref` 必须是不含 secret
+和正文的 opaque reference。Binding 配置位于 `OPL_PERSONA_HOME` 的私有配置表面，不进入
+Git、Package、Plugin cache、App state 或公开日志。
+
+`health` 与 `currentness` 不是 Binding 文件中的持久事实。每次检查由 Provider fresh
+回读并产生独立结果：
+
+```yaml
+schema_version: opl-persona-binding-health.v1
+binding_id: my-knowledge
+checked_at: 2026-07-28T00:00:00Z
+status: healthy
+supported_operations: [read, search, propose, apply_approved, readback]
+authority_readback_ref: vault-readback://...
+issues: []
+```
+
+允许的状态是 `healthy`、`degraded`、`unavailable`、`unauthorized` 与 `unconfigured`。
+未执行 fresh health readback 时只能报告 `unknown`，不能从 Package installed/enabled
+状态推断 Binding 可用。
 
 Binding 只保存资源引用、scope 和策略。邮箱内容、Obsidian 内容、个人资料值、网站源码、
 Cookie、token 和密码仍由各自 authority 或用户选择的安全位置管理。当前个人资料设计中，
@@ -151,6 +201,32 @@ Recipe 只能声明需要或偏好的 Capability、选择 Binding 的规则和�
 通用 Inbox 是 staging 与 triage surface，不是长期知识库或第二邮箱。条目只有在目标
 authority 实际写入并回读后，才可标记为已迁移；保留 source reference，避免丢失来源。
 
+最小私有条目合同为：
+
+```yaml
+schema_version: opl-persona-inbox-item.v1
+item_id: inbox-...
+captured_at: 2026-07-28T00:00:00Z
+source_refs: [email-store://..., https://...]
+source_kind: mail
+summary: bounded derived summary
+status: captured
+routes: []
+```
+
+Inbox 只持久化稳定 `source_refs`、有界摘要、状态和路由记录，不复制邮件正文、网页归档、
+Obsidian 文档或网站 checkout。需要完整内容时由对应 authority 重新读取。建议状态机为：
+
+```text
+captured -> triaged -> proposal_ready -> routed -> resolved
+                    \-> dismissed
+```
+
+每个 route 至少记录目标 `capability_id`、`binding_id`、proposal ref、owner action ref
+和 authority receipt/readback ref。`routed` 只表示已交给 owner；只有目标 authority
+回读成功后才进入 `resolved`。原始邮件即使被 capture，仍由 Relay 邮箱存储拥有，不会
+迁入 Persona Inbox。
+
 ## 发现、组合与状态
 
 发现应按以下顺序呈现，而不是把“安装插件”当成全部状态：
@@ -185,12 +261,12 @@ descriptor、测试 fixture 或本地候选不能证明真实资源已可用。
 
 ## 分阶段落地
 
-1. **合同固化**：以本文档为设计 SSOT，后续在 Package descriptor 中逐步增加 Capability
-   声明，不改变现有 proposal 安全边界。
+1. **合同固化**：以本文档为设计 SSOT，后续在 Package descriptor 中逐步增加通用
+   Capability 声明和 legacy alias，不改变现有 proposal 安全边界。
 2. **三源闭环**：以 Obsidian、Relay、`gflab_web` 验证一次“论文 → 知识库 + 网站 + 邮件”
    的 proposal/readback 链路。
-3. **Binding 管理**：在通用 Package 管理退役完成后，由 OPL Base 提供 carrier-neutral
-   discovery/status/action projection，OPL App 呈现 Provider 与 Binding 状态。
+3. **Binding 管理**：carrier-neutral Package discovery/status/action projection 已可用；
+   下一步由 Provider 提供 Binding health/readback，OPL App 只呈现其结果。
 4. **专业输出扩展**：按真实频率加入表格和外部专业门户 adapter，不预制低频站点。
 5. **Recipe 组合**：形成 PI、学术编辑、审稿专家等 Recipe；Recipe 始终可检查、可调整、
    可停用。

@@ -1,6 +1,6 @@
 # OPL App 能力管理与统一审核规划
 
-状态：`deferred_execution`
+状态：`discovery_projection_completed`；语义化 UI 与统一审核仍为 `deferred_execution`
 
 本文件记录已经确定的产品边界和实施顺序，供后续 Framework、OPL App、Shell
 和 Package owner 协调时使用。它不授权实现 UI、安装/更新/卸载、邮件发送、
@@ -27,9 +27,9 @@ Domain owner           邮件、提案、知识库、网站等领域语义和最
 Relay 和 Persona 是第一批真实 Package，但它们不是 App 中的特殊案例。任意合规的
 未知 Package 都必须能以同一条路径出现、维护和局部降级。
 
-## 当前事实与缺口
+## 当前事实与剩余缺口
 
-截至本规划建立时，`codex plugin list --json` 已确认以下两个 carrier 都已本地安装且
+截至 2026-07-28，`codex plugin list --json` 已确认以下两个 carrier 都已本地安装且
 启用：
 
 | Package | Codex Plugin | 原生状态 |
@@ -37,14 +37,19 @@ Relay 和 Persona 是第一批真实 Package，但它们不是 App 中的特殊�
 | `opl-relay` | `opl-relay@opl-relay` | installed, enabled |
 | `opl-persona` | `opl-persona@opl-persona-local` | installed, enabled |
 
-但同一时点的 `opl app state --profile fast --json` 中，动态
-`app_state.agent_packages.directory.entries` 和 `status_index` 尚未出现这两个
-Package。因此 App 现在不能诚实地声称自己正在统一管理它们。Package manifest 中已有
-role-neutral `app_contributions` 是 producer-side contract，不等于运行态 discovery、
-carrier readback 或 UI 已生效。
+原先记录的 W3 缺口已经关闭：Framework 的动态 Package directory、status/action
+projection 与 role-neutral contribution read/execute 路径现已能发现并调用 Relay 和
+Persona。该结果证明的是“Package 已被宿主发现且其声明的贡献可路由”，不是以下任何一种
+更强结论：
 
-这也是实施的第一个真实断点：先接通已安装 Package 的 carrier-neutral discovery 和
-action projection，再做 App/Shell 的可视化消费。
+- 对应邮箱、Obsidian vault 或网站 Resource Binding 已配置并健康；
+- App/Shell 已按 `list_detail`、`approval_diff` 等 view kind 完成语义化渲染；
+- carrier 已可靠投影安装、更新、修复、卸载等全部 mutation；
+- 任一 Persona proposal、邮件草稿、vault 写入或网站变更已得到批准并进入最终 authority。
+
+因此第一个真实断点已从 W3 discovery 转移到 Resource Binding 健康回读、标准 view
+renderer、统一审核和 owner adapter 的批准后闭环。后续不能继续以“尚未动态发现
+Relay/Persona”为理由增加静态卡片或 Package id 特判。
 
 ## 能力管理面
 
@@ -120,28 +125,29 @@ Persona 的“批准提案”只允许进入该 proposal 的下一条 owner rout
 网站、知识库或邮件系统。Relay 的“发送”只能对回读确认的 Apple Mail 草稿执行。App
 只渲染结构化数据、调用 opaque action、显示结果，绝不成为第二邮件引擎或直接外部写入者。
 
-## 实施前置与顺序
+## 实施状态与顺序
 
-本规划不改变正在执行的 Package Manager 退役任务；后续应复用其 `W3`、`W4` 边界。
+本规划不改变正在执行的 legacy Package Manager 退役任务。已完成的 W3 producer 路径
+和仍待实施的 W4/UI 路径必须分开记录：
 
 ```text
-W3 Framework
+W3 Framework                                      COMPLETED
   fresh carrier discovery + status/actions projection
        |
        v
 Package owners
-  canonical Relay/Persona descriptors and carrier declarations
+  canonical Relay/Persona descriptors and contributions  COMPLETED
        |
        v
-W4 App
-  role-neutral capabilities inventory + action contract + preferences
+Resource Binding + owner adapters                 ACTIVE SEPARATE LANES
+  private binding config + health + approved apply/readback
        |
        v
-W4 Shell
-  generic renderer + refresh + local unavailable state
+W4 App / Shell                                    PARTIAL / DEFERRED
+  role-neutral inventory + semantic renderers + local unavailable state
        |
        v
-Deferred view slice
+Unified review slice                              DEFERRED
   standard renderers + unified approvals + Relay/Persona data/action bridges
 ```
 
@@ -154,16 +160,17 @@ Deferred view slice
 | OPL App | 角色无关的管理与审核产品合同、偏好、验收 | 领域状态、版本选择、carrier 语义 |
 | Shell | 基于 contract 的通用渲染、确认、刷新和局部错误态 | Package id 分支、manifest/lock/receipt 解析 |
 
-如果 `W3` 的真实 carrier readback 未能发现一个已安装 Package，必须先修复该唯一断点。
-不得用静态 Relay/Persona 卡片或手工维护的 catalog 绕过它。
+后续若 fresh carrier readback 再次无法发现一个已安装 Package，应把它作为 currentness
+回归修复，仍不得用静态 Relay/Persona 卡片或手工维护的 catalog 绕过。正常情况下，
+实施重点已经是消费现有 projection，而不是再造 discovery。
 
-## 未来验收条件
+## 已完成门禁与未来验收条件
 
-实际执行本规划前，应将下列结果作为独立的完成门禁，而不是以文档、fixture 或单元测试
-替代：
+下列第 1 项已完成；其余结果仍是独立门禁，不能用文档、fixture、单元测试或 Package
+installed 状态替代：
 
-1. fresh `opl app state --profile fast --json` 能为已安装的 Relay 与 Persona 返回动态
-   directory/status/action projection，并与原生 carrier readback 一致。
+1. **已完成**：fresh App state 能为已安装的 Relay 与 Persona 返回动态
+   directory/status/action projection，contribution read/execute 可到达 owner route。
 2. 一个未知的合规测试 Package 无需改动 App/Shell 源码即可进入同一管理页面；invalid
    Package 仅自身不可用。
 3. 安装、更新、修复、卸载均通过 projected action 到达 configured carrier；普通
@@ -176,7 +183,10 @@ Deferred view slice
 
 ## 当前行动
 
-本文件本身是唯一已完成的行动：确定目标边界、真实发现缺口和后续验收条件。
-所有 UI mount、carrier 接通、安装管理、统一审核队列和外部 mutation 均保持
-`deferred_execution`，等待 Package 退役链路中相应 producer/consumer 的 canonical
-前置条件满足后再按独立 write set 实施。
+W3 discovery、status/action projection 与 Relay/Persona contribution 路由已经完成，
+不再是当前前置。现在允许按独立 write set 推进 Resource Binding、Persona Inbox、
+Obsidian approved-apply、网站 owner route 和 Relay 草稿 handoff。
+
+OPL App/Shell 的标准 view mount、统一审核队列、通用 Package mutation 控件仍保持
+`deferred_execution`。这些 UI 只有在相应 read model、opaque action、确认要求与最终
+authority readback 都可由 owner route 提供后才实施，不能由 App 自行补造领域状态。
