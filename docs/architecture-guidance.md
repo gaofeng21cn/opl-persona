@@ -178,6 +178,20 @@ The default proposal policy is:
 }
 ```
 
+For an inbox decision, Persona also requires a stable `email-store://`
+evidence reference and the policy evidence used to make the recommendation.
+The resulting `mail.triage` proposal contains classification, priority,
+rationale, uncertainty, recommended action, `policy_refs`, and a SHA-256
+`policy_digest`; its companion `personal.inbox.v1` capture is only a visual
+projection proposal, never a second mailbox.
+
+For Obsidian, `knowledge.obsidian.note.v1` can propose exactly one `create` or
+`update`. It carries a relative `target_path`, frontmatter, body, links, tags,
+evidence refs, and an `expected_digest` precondition. The contract explicitly
+allows only a reviewable proposal and forbids direct vault, filesystem, mail,
+or website writes. The Obsidian authority must re-check the precondition after
+approval before mutating a vault.
+
 Therefore these are distinct states:
 
 - proposal generated;

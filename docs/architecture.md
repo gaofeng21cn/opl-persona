@@ -23,12 +23,30 @@ The only cross-system write primitive is a reviewable proposal:
 ```text
 publication -> knowledge.ingest + website.publication
 Obsidian memo -> website.article + mail.draft_context
+mail evidence -> personal.inbox.v1 capture + mail.triage
+knowledge input -> knowledge.obsidian.note.v1 create/update proposal
 ```
 
 Each proposal contains a stable id, an explicit target, payload, source
 references, and `approval.external_write_allowed=false`. An adapter can execute
 only an exact user-approved proposal. A proposal is not a published website
 change, sent email, or written vault note.
+
+## Inbox and Obsidian proposal contracts
+
+`mail.triage` is a policy-bound interpretation of one or more stable
+`email-store://` source references. It records a classification, priority,
+rationale, uncertainty, recommended action, policy references, and an exact
+policy digest. It also emits a generic `personal.inbox.v1` capture proposal so
+that an App can show a cross-domain inbox without becoming a second mailbox.
+Missing mail or policy provenance fails closed.
+
+`knowledge.obsidian.note.v1` is a proposal for exactly one relative Markdown
+target path. It carries frontmatter, body, links, tags, evidence references,
+and a target precondition: `expected_digest` is `absent` for creation or the
+current SHA-256 digest for update. Persona has no apply operation. The note
+adapter must check that precondition after the user approves the exact proposal
+and before any vault write.
 
 ## Runtime data
 

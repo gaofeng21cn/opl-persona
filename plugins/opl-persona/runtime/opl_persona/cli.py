@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from .app_contributions import handle_request
-from .core import build_memo_proposals, build_publication_proposals, dump_json
+from .core import (
+    build_inbox_capture_proposals,
+    build_mail_triage_proposals,
+    build_memo_proposals,
+    build_obsidian_note_proposals,
+    build_publication_proposals,
+    dump_json,
+)
 from .paths import PersonaPaths
 from .obsidian import memo_proposals_from_file
 
@@ -31,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     proposal = sub.add_parser("proposal")
     proposal_sub = proposal.add_subparsers(dest="kind", required=True)
-    for kind in ("publication", "memo"):
+    for kind in ("publication", "memo", "mail-triage", "inbox-capture", "obsidian-note"):
         command = proposal_sub.add_parser(kind)
         command.add_argument("--input", required=True, help="JSON file or - for stdin")
     memo_file = proposal_sub.add_parser("memo-file", help="从 Obsidian Markdown 只读生成 memo 提案")
@@ -56,6 +63,12 @@ def main(argv: list[str] | None = None) -> int:
             result = build_publication_proposals(_read_input(args.input))
         elif args.kind == "memo":
             result = build_memo_proposals(_read_input(args.input))
+        elif args.kind == "mail-triage":
+            result = build_mail_triage_proposals(_read_input(args.input))
+        elif args.kind == "inbox-capture":
+            result = build_inbox_capture_proposals(_read_input(args.input))
+        elif args.kind == "obsidian-note":
+            result = build_obsidian_note_proposals(_read_input(args.input))
         else:
             result = memo_proposals_from_file(
                 Path(args.path),
