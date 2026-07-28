@@ -26,8 +26,21 @@ Every external write is a proposal until the user approves it. The package,
 plugin, and source checkout never contain private data.
 
 Private mail judgment rules live as Markdown under the configured Profile
-Workspace (`$OPL_PROFILE_WORKSPACE/policies/`). Persona loads those rules and
+Workspace (`<profile>/policies/`, selected by `OPL_PROFILE_WORKSPACE`). Persona loads those rules and
 records a content digest in each `mail.triage` proposal; OPL Relay remains the
 mail fact, draft, send, and receipt authority. See
 [`docs/mail-policy.md`](docs/mail-policy.md) for the boundary and routing
 contract.
+
+## Local installation
+
+```bash
+make install-local
+OPL_PROFILE_WORKSPACE=~/OPL/profiles/<user> opl-persona doctor
+```
+
+Install or update the Codex Plugin carrier through this repository's local
+marketplace; do not maintain plugin cache copies by hand. Obsidian bindings
+live in `<profile>/data/persona/resource-bindings.json`. CLI callers select a
+binding id and never pass a vault absolute path or a module-specific
+environment variable.

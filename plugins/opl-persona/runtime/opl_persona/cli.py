@@ -17,6 +17,7 @@ from .core import (
 )
 from .paths import PersonaPaths
 from .obsidian import memo_proposals_from_file
+from .bindings import DEFAULT_OBSIDIAN_BINDING_ID
 
 
 def _read_input(path: str) -> dict[str, Any]:
@@ -43,7 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--input", required=True, help="JSON file or - for stdin")
     memo_file = proposal_sub.add_parser("memo-file", help="从 Obsidian Markdown 只读生成 memo 提案")
     memo_file.add_argument("--path", required=True)
-    memo_file.add_argument("--vault", default="")
+    memo_file.add_argument(
+        "--binding",
+        default=DEFAULT_OBSIDIAN_BINDING_ID,
+        help="Profile Workspace resource binding id",
+    )
     return parser
 
 
@@ -72,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             result = memo_proposals_from_file(
                 Path(args.path),
-                vault=Path(args.vault) if args.vault else None,
+                binding_id=args.binding,
             )
         sys.stdout.write(dump_json(result))
         return 0

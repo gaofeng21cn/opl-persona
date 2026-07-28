@@ -1,29 +1,54 @@
+import json
 from pathlib import Path
 
 from opl_persona.paths import PersonaPaths
 
 
+def write_obsidian_binding(profile: Path, vault: Path) -> None:
+    path = profile / "data" / "persona" / "resource-bindings.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "opl-persona-resource-bindings.v1",
+                "bindings": {
+                    "my-knowledge": {
+                        "schema_version": "opl-persona-resource-binding.v1",
+                        "capability_id": "knowledge.documents.v1",
+                        "provider_id": "obsidian",
+                        "resource_ref": vault.resolve().as_uri(),
+                        "scopes": ["notes.read"],
+                        "policy": {"approval_required": True},
+                        "health": {"status": "unknown"},
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_paths_prefer_persona_environment(tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
     paths = PersonaPaths.resolve(
         environ={
-            "OPL_PERSONA_HOME": str(tmp_path / "data"),
-            "OPL_PERSONA_WORKSPACE": str(tmp_path / "workspace"),
-            "OPL_RELAY_HOME": str(tmp_path / "relay"),
+            "OPL_PROFILE_WORKSPACE": str(profile),
         }
     )
-    assert paths.data_root == tmp_path / "data"
-    assert paths.workspace == tmp_path / "workspace"
+    assert paths.data_root == profile / "data" / "persona"
+    assert paths.workspace == profile
 
 
-def test_paths_do_not_fall_back_to_relay_home(tmp_path: Path) -> None:
+def test_paths_default_to_user_profile_workspace(monkeypatch, tmp_path: Path) -> None:
+    from opl_persona import paths as paths_module
+
+    home = tmp_path / "home"
+    monkeypatch.setattr(paths_module.Path, "home", staticmethod(lambda: home))
     paths = PersonaPaths.resolve(
-        environ={
-            "OPL_RELAY_HOME": str(tmp_path / "relay"),
-            "HOME": str(tmp_path / "home"),
-        }
+        environ={}
     )
-    assert paths.data_root == Path.home() / "OPL" / "profiles" / Path.home().name / "data" / "persona"
-    assert paths.data_root != tmp_path / "relay"
+    assert paths.workspace == home / "OPL" / "profiles" / home.name
+    assert paths.data_root == paths.workspace / "data" / "persona"
 
 
 def test_paths_share_profile_workspace_when_selected(tmp_path: Path) -> None:
@@ -35,21 +60,6 @@ def test_paths_share_profile_workspace_when_selected(tmp_path: Path) -> None:
     )
     assert paths.workspace == profile
     assert paths.data_root == profile / "data" / "persona"
-
-
-def test_paths_never_use_legacy_persona_home_as_fallback(monkeypatch, tmp_path: Path) -> None:
-    from opl_persona import paths as paths_module
-
-    home = tmp_path / "home"
-    legacy = home / ".opl-persona"
-    legacy.mkdir(parents=True)
-    monkeypatch.setattr(paths_module.Path, "home", staticmethod(lambda: home))
-
-    paths = PersonaPaths.resolve(environ={})
-
-    assert paths.workspace == home / "OPL" / "profiles" / home.name
-    assert paths.data_root == paths.workspace / "data" / "persona"
-    assert paths.data_root != legacy
 
 
 def test_workspace_init_creates_profile_skeleton(tmp_path: Path) -> None:
@@ -67,10 +77,25 @@ def test_workspace_init_creates_profile_skeleton(tmp_path: Path) -> None:
 def test_obsidian_note_is_read_only_and_scoped(tmp_path: Path) -> None:
     from opl_persona.obsidian import memo_proposals_from_file
 
+    profile = tmp_path / "profile"
     vault = tmp_path / "vault"
     vault.mkdir()
+    write_obsidian_binding(profile, vault)
     note = vault / "memo.md"
     note.write_text("# Memo\n\nContent.", encoding="utf-8")
-    result = memo_proposals_from_file(note, vault=vault)
+    result = memo_proposals_from_file(note, workspace=profile)
     assert result["input_id"] == "obsidian://default/memo.md"
     assert note.read_text(encoding="utf-8") == "# Memo\n\nContent."
+
+
+def test_obsidian_note_requires_profile_resource_binding(tmp_path: Path) -> None:
+    from opl_persona.obsidian import memo_proposals_from_file
+
+    note = tmp_path / "memo.md"
+    note.write_text("# Memo", encoding="utf-8")
+    try:
+        memo_proposals_from_file(note, workspace=tmp_path / "profile")
+    except FileNotFoundError as exc:
+        assert "resource binding store not found" in str(exc)
+    else:
+        raise AssertionError("Obsidian access without a Profile Resource Binding must fail")

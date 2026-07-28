@@ -127,7 +127,7 @@ enabled: true
 ```
 
 `capability_id` 必须是通用 ID；`resource_ref` 与可选 `credential_ref` 必须是不含 secret
-和正文的 opaque reference。Binding 配置位于 `OPL_PERSONA_HOME` 的私有配置表面，不进入
+和正文的 opaque reference。Binding 配置位于 `<profile>/data/persona` 的私有配置表面，不进入
 Git、Package、Plugin cache、App state 或公开日志。
 
 `health` 与 `currentness` 不是 Binding 文件中的持久事实。每次检查由 Provider fresh

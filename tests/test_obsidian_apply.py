@@ -57,7 +57,6 @@ def test_approved_create_is_atomic_and_returns_authority_readback(tmp_path: Path
         approved,
         approved["approval"],
         binding=binding(vault),
-        vault=vault,
     )
 
     note = vault / "Knowledge/new-memo.md"
@@ -75,7 +74,7 @@ def test_approved_create_is_atomic_and_returns_authority_readback(tmp_path: Path
         "bytes": len(note.read_bytes()),
         "matches_written_bytes": True,
     }
-    assert not list(vault.rglob(".opl-persona-note.*"))
+    assert not list(vault.rglob(".persona-note.*"))
 
 
 def test_update_rechecks_expected_digest_and_preserves_file_on_mismatch(tmp_path: Path) -> None:
@@ -101,7 +100,6 @@ def test_update_rechecks_expected_digest_and_preserves_file_on_mismatch(tmp_path
             approved,
             approved["approval"],
             binding=binding(vault),
-            vault=vault,
         )
     assert note.read_bytes() == original
 
@@ -142,7 +140,6 @@ def test_update_rechecks_precondition_immediately_before_atomic_replace(
             approved,
             approved["approval"],
             binding=binding(vault),
-            vault=vault,
         )
     assert note.read_bytes() == raced
 
@@ -169,7 +166,6 @@ def test_apply_rejects_tampered_proposal_wrong_binding_and_non_external_approval
             approved,
             approved["approval"],
             binding=binding(vault),
-            vault=vault,
         )
 
     not_external = approve_proposal(
@@ -181,7 +177,6 @@ def test_apply_rejects_tampered_proposal_wrong_binding_and_non_external_approval
             not_external,
             not_external["approval"],
             binding=binding(vault),
-            vault=vault,
         )
 
     external = approve_proposal(
@@ -189,12 +184,17 @@ def test_apply_rejects_tampered_proposal_wrong_binding_and_non_external_approval
         approval_ref="approval://user/obsidian-create-3",
         external_write_allowed=True,
     )
-    with pytest.raises(ValueError, match="does not match"):
+    wrong_binding = binding_for_resource(
+        capability_id="knowledge.documents.v1",
+        provider_id="obsidian",
+        resource_ref=other.resolve().as_uri(),
+        scopes=["notes.read"],
+    )
+    with pytest.raises(ValueError, match="notes.write"):
         apply_approved_obsidian_note(
             external,
             external["approval"],
-            binding=binding(other),
-            vault=vault,
+            binding=wrong_binding,
         )
     assert not (vault / "memo.md").exists()
 
@@ -222,6 +222,5 @@ def test_apply_rejects_symlink_escape(tmp_path: Path) -> None:
             approved,
             approved["approval"],
             binding=binding(vault),
-            vault=vault,
         )
     assert not (outside / "memo.md").exists()

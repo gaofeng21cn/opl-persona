@@ -5,16 +5,22 @@ import json
 import re
 from email.utils import getaddresses, parseaddr
 from datetime import datetime, timezone
-from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Mapping
-from urllib.parse import urlsplit
 
 from .paths import PersonaPaths
-from .policy import PolicySnapshot, load_markdown_policies
+from .policy import (
+    MailContextSnapshot,
+    PolicySnapshot,
+    load_mail_context,
+    load_markdown_policies,
+    resolve_manuscript_context,
+)
 
 SCHEMA_VERSION = "opl-persona-proposal.v1"
-EMAIL_STORE_REF_PREFIX = "email-store://"
+RELAY_TRIAGE_EVIDENCE_SCHEMA = "opl-relay-mail-triage-evidence.v2"
+RELAY_POLICY_DIGEST_SCOPE = "relay_policy_refs.v1"
+_EMAIL_STORE_REF = re.compile(r"^email-store://[^/\s]+/[^/\s]+/[1-9][0-9]*/[0-9a-f]{16}$")
 OBSIDIAN_NOTE_CONTRACT = "knowledge.obsidian.note.v1"
 
 
@@ -62,68 +68,173 @@ def _string_list(
     return values
 
 
-def _email_store_source_refs(payload: Mapping[str, Any]) -> list[str]:
-    refs = _source_refs(payload)
-    for ref in refs:
-        parsed = urlsplit(ref)
-        if (
-            parsed.scheme != "email-store"
-            or not parsed.netloc
-            or len([part for part in parsed.path.split("/") if part]) < 2
-            or parsed.query
-            or parsed.fragment
-            or any(char.isspace() for char in ref)
-        ):
-            raise ValueError("mail triage source_refs must use stable email-store:// identities")
+def _email_store_source_refs(value: object) -> list[str]:
+    if not isinstance(value, list) or len(value) != 1:
+        raise ValueError("Relay triage evidence must contain exactly one source_refs entry")
+    refs = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+    if len(refs) != 1 or not _EMAIL_STORE_REF.fullmatch(refs[0]):
+        raise ValueError("Relay triage evidence source_refs must use canonical email-store identities")
     return refs
 
 
-def _policy_provenance(
-    payload: Mapping[str, Any],
-) -> tuple[list[str], str, PolicySnapshot | None, str | None]:
-    policy_refs = _string_list(payload, "policy_refs")
-    digest_kind = str(payload.get("policy_digest_kind") or "").strip()
-    if digest_kind and digest_kind not in {"content", "refs_set"}:
-        raise ValueError("policy_digest_kind must be content or refs_set")
-    policy_digest = str(
-        payload.get("persona_policy_digest") or payload.get("policy_digest") or ""
-    ).strip()
-    relay_policy_digest = str(payload.get("relay_policy_digest") or "").strip() or None
-    if digest_kind == "refs_set" and relay_policy_digest is None:
-        relay_policy_digest = policy_digest or None
-        policy_digest = str(payload.get("persona_policy_digest") or "").strip()
-    if relay_policy_digest and not re.fullmatch(r"sha256:[0-9a-f]{64}", relay_policy_digest):
-        raise ValueError("relay_policy_digest must be a sha256 digest")
-    explicit_workspace = str(payload.get("policy_workspace") or "").strip()
-    explicit_paths = payload.get("policy_paths") or payload.get("policy_files")
-    should_load = bool(explicit_workspace or explicit_paths)
-    if relay_policy_digest and not should_load:
-        workspace = PersonaPaths.resolve().workspace
-        should_load = (workspace / "policies").is_dir()
-        if not should_load:
-            raise ValueError("Persona Markdown policy workspace is required for mail triage")
-    if not policy_digest and not should_load:
-        workspace = PersonaPaths.resolve().workspace
-        should_load = (workspace / "policies").is_dir()
-    if should_load:
-        if explicit_paths is not None and not isinstance(explicit_paths, (list, tuple)):
-            raise ValueError("policy_paths must be a list of strings")
-        workspace = Path(explicit_workspace).expanduser() if explicit_workspace else None
-        snapshot = load_markdown_policies(
-            workspace=workspace,
-            refs=policy_refs or None,
-            paths=explicit_paths,
-        )
-        if policy_digest and policy_digest != snapshot.digest:
-            raise ValueError("policy_digest does not match the selected Markdown policy content")
-        return list(policy_refs or snapshot.refs), snapshot.digest, snapshot, relay_policy_digest
-    if not policy_refs:
-        raise ValueError("policy_refs is required when no Markdown policy workspace is configured")
-    if not policy_digest:
-        raise ValueError("policy_digest is required")
-    if not re.fullmatch(r"sha256:[0-9a-f]{64}", policy_digest):
-        raise ValueError("policy_digest must be a sha256 digest")
-    return policy_refs, policy_digest, None, relay_policy_digest
+def _sha256(value: object, name: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+        raise ValueError(f"{name} must be a sha256 digest")
+    return value
+
+
+def _relay_policy_digest(refs: list[str]) -> str:
+    encoded = json.dumps(sorted(refs), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def _hex_digest(value: object, name: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ValueError(f"{name} must be a lowercase SHA-256 hex digest")
+    return value
+
+
+def _relay_v2_evidence(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Verify Relay's facts-only envelope before Persona interprets it."""
+
+    if set(payload) != {"relay_evidence"}:
+        raise ValueError("mail triage accepts only a relay_evidence bridge input")
+    evidence = payload.get("relay_evidence")
+    if not isinstance(evidence, Mapping):
+        raise ValueError("relay_evidence must be an object")
+    if evidence.get("schema_version") != RELAY_TRIAGE_EVIDENCE_SCHEMA:
+        raise ValueError(f"relay_evidence.schema_version must be {RELAY_TRIAGE_EVIDENCE_SCHEMA}")
+    source_refs = _email_store_source_refs(evidence.get("source_refs"))
+    mail = evidence.get("mail")
+    if not isinstance(mail, Mapping) or mail.get("source_ref") != source_refs[0]:
+        raise ValueError("relay_evidence.mail.source_ref must match source_refs[0]")
+    headers = mail.get("headers")
+    if not isinstance(headers, Mapping):
+        raise ValueError("relay_evidence.mail.headers is required")
+    subject = headers.get("subject")
+    if not isinstance(subject, str):
+        raise ValueError("relay_evidence.mail.headers.subject must be a string")
+    sender = headers.get("from")
+    if not isinstance(sender, str):
+        raise ValueError("relay_evidence.mail.headers.from must be a string")
+    for name in ("to", "cc", "bcc"):
+        if not isinstance(headers.get(name), str):
+            raise ValueError(f"relay_evidence.mail.headers.{name} must be a string")
+    raw_readback = mail.get("raw_readback")
+    if not isinstance(raw_readback, Mapping) or raw_readback.get("status") != "available":
+        raise ValueError("relay_evidence.mail.raw_readback must be available")
+    _hex_digest(raw_readback.get("raw_sha256"), "relay_evidence.mail.raw_readback.raw_sha256")
+    _hex_digest(raw_readback.get("raw_eml_sha256"), "relay_evidence.mail.raw_readback.raw_eml_sha256")
+    body = raw_readback.get("body_text")
+    if not isinstance(body, str):
+        raise ValueError("relay_evidence.mail.raw_readback.body_text must be a string")
+    freshness = evidence.get("freshness")
+    if not isinstance(freshness, Mapping) or freshness.get("status") != "local_store_readback":
+        raise ValueError("relay_evidence.freshness must record a local_store_readback")
+    for field in ("observed_at", "ingested_at", "message_date"):
+        if not isinstance(freshness.get(field), str) or not freshness[field].strip():
+            raise ValueError(f"relay_evidence.freshness.{field} is required")
+    policy = evidence.get("policy")
+    if not isinstance(policy, Mapping):
+        raise ValueError("relay_evidence.policy is required")
+    relay_policy_refs = _string_list(policy, "policy_refs", required=True)
+    relay_policy_digest = _sha256(policy.get("policy_digest"), "relay_evidence.policy.policy_digest")
+    if relay_policy_digest != _relay_policy_digest(relay_policy_refs):
+        raise ValueError("relay_evidence.policy.policy_digest does not match policy_refs")
+    triage = evidence.get("triage")
+    if not isinstance(triage, Mapping) or triage.get("mode") != "evidence_only":
+        raise ValueError("relay_evidence.triage must remain evidence_only")
+    risk = evidence.get("risk")
+    if not isinstance(risk, Mapping) or risk.get("external_write_allowed") is not False:
+        raise ValueError("relay_evidence.risk must forbid external writes")
+    if risk.get("provider_write_reachable") is not False:
+        raise ValueError("relay_evidence.risk must not expose provider writes")
+    provider_write = evidence.get("provider_write")
+    if not isinstance(provider_write, Mapping) or provider_write.get("status") != "unreachable":
+        raise ValueError("relay_evidence.provider_write must remain unreachable")
+    routing_facts = mail.get("routing_facts")
+    if not isinstance(routing_facts, Mapping):
+        raise ValueError("relay_evidence.mail.routing_facts must be an object")
+    allowed_routing_fields = {
+        "to_addresses",
+        "cc_addresses",
+        "bcc_addresses",
+        "recipient_count",
+        "is_unique_recipient",
+    }
+    unexpected = sorted(set(routing_facts) - allowed_routing_fields)
+    if unexpected:
+        raise ValueError("relay_evidence.mail.routing_facts contains unsupported fields: " + ", ".join(unexpected))
+    normalized_headers = {}
+    for name in ("to", "cc", "bcc"):
+        fact_name = f"{name}_addresses"
+        values = routing_facts.get(fact_name)
+        if not isinstance(values, list):
+            raise ValueError(f"relay_evidence.mail.routing_facts.{fact_name} must be an array")
+        if not all(
+            isinstance(item, Mapping)
+            and isinstance(item.get("name"), str)
+            and isinstance(item.get("address"), str)
+            and item["address"].strip()
+            for item in values
+        ):
+            raise ValueError(f"relay_evidence.mail.routing_facts.{fact_name} contains an invalid recipient")
+        parsed_header = _address_strings(headers[name])
+        parsed_facts = _addresses(values)
+        if parsed_header != parsed_facts:
+            raise ValueError(f"relay_evidence.mail.routing_facts.{fact_name} must match mail.headers.{name}")
+        normalized_headers[name] = parsed_facts
+    recipient_count = routing_facts.get("recipient_count")
+    unique_recipient = routing_facts.get("is_unique_recipient")
+    if isinstance(recipient_count, bool) or not isinstance(recipient_count, int) or recipient_count < 0:
+        raise ValueError("relay_evidence.mail.routing_facts.recipient_count must be a non-negative integer")
+    observed_count = len(
+        {
+            item["email"]
+            for recipients in normalized_headers.values()
+            for item in recipients
+        }
+    )
+    if recipient_count != observed_count:
+        raise ValueError("relay_evidence.mail.routing_facts.recipient_count must match mail.headers")
+    if not isinstance(unique_recipient, bool):
+        raise ValueError("relay_evidence.mail.routing_facts.is_unique_recipient must be a boolean")
+    if unique_recipient != (recipient_count == 1):
+        raise ValueError("relay_evidence.mail.routing_facts.is_unique_recipient must match recipient_count")
+    return {
+        "email_ref": source_refs[0],
+        "source_refs": source_refs,
+        "subject": subject.strip(),
+        "summary": body.strip()[:_MAX_TRIAGE_SUMMARY] or subject.strip(),
+        "body": body,
+        "from": sender.strip(),
+        "to": normalized_headers["to"],
+        "cc": normalized_headers["cc"],
+        "bcc": normalized_headers["bcc"],
+        "user_addresses": [],
+        "actual_first_author": None,
+        "team_members": [],
+        "follow_up_by": None,
+        "relay_policy_refs": relay_policy_refs,
+        "relay_policy_digest": relay_policy_digest,
+        "relay_evidence_schema": RELAY_TRIAGE_EVIDENCE_SCHEMA,
+    }
+
+
+_MAX_TRIAGE_SUMMARY = 4096
+
+
+def _policy_provenance() -> tuple[list[str], str, PolicySnapshot]:
+    """Load every Markdown rule from the one Profile Workspace or fail closed."""
+
+    snapshot = load_markdown_policies(workspace=PersonaPaths.resolve().workspace)
+    return list(snapshot.refs), snapshot.digest, snapshot
+
+
+def _mail_context_provenance() -> MailContextSnapshot:
+    """Load identity and routing facts from the same selected Profile."""
+
+    return load_mail_context(workspace=PersonaPaths.resolve().workspace)
 
 
 def _proposal_id(kind: str, input_id: str, target: str) -> str:
@@ -259,7 +370,11 @@ def _recipient_analysis(payload: Mapping[str, Any]) -> dict[str, Any]:
         and bool(recipient_emails & self_emails)
     )
     sent_to_first_author = bool(first_author_email and first_author_email in recipient_emails)
-    forwarded = matched_team_member if unique_recipient and matched_team_member else None
+    forwarded = (
+        first_author
+        if unique_recipient and matched_team_member and first_author and first_author.get("email")
+        else matched_team_member if unique_recipient and matched_team_member else None
+    )
     current_follow_up = (
         payload.get("current_follow_up")
         or payload.get("followed_up_by")
@@ -539,23 +654,30 @@ def build_inbox_capture_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
 def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Create inbox-capture and policy-bound mail-triage proposals.
 
-    Persona classifies supplied evidence only. Relay remains the authority for
-    the email identity, mailbox state, draft lifecycle, and any later action.
+    Persona accepts only a verified Relay v2 facts-only envelope. Relay remains
+    the authority for the email identity, mailbox state, draft lifecycle, and
+    any later action; Persona reloads its own Markdown policy before judging it.
     """
-    email_ref = _required(payload, "email_ref")
-    if not email_ref.startswith(EMAIL_STORE_REF_PREFIX):
-        raise ValueError("email_ref must use a stable email-store:// identity")
-    source_refs = _email_store_source_refs(payload)
-    if email_ref not in source_refs:
-        raise ValueError("email_ref must also be present in source_refs")
-    policy_refs, policy_digest, policy_snapshot, relay_policy_digest = _policy_provenance(payload)
-    subject = _required(payload, "subject")
-    summary = _required(payload, "summary")
-    routing = _recipient_analysis(payload)
-    derived = _policy_classification(payload, routing=routing, policy=policy_snapshot)
-    classification = str(payload.get("classification") or derived["classification"]).strip()
-    priority = str(payload.get("priority") or derived["priority"]).strip()
-    rationale = str(payload.get("rationale") or derived["rationale"]).strip()
+    relay = _relay_v2_evidence(payload)
+    email_ref = relay["email_ref"]
+    source_refs = relay["source_refs"]
+    policy_refs, policy_digest, policy_snapshot = _policy_provenance()
+    subject = relay["subject"]
+    summary = relay["summary"]
+    mail_context = _mail_context_provenance()
+    manuscript_context = resolve_manuscript_context(
+        mail_context,
+        subject=subject,
+        body=relay["body"],
+    )
+    relay["user_addresses"] = list(mail_context.user_addresses)
+    relay["team_members"] = [dict(item) for item in mail_context.team_members]
+    relay.update(manuscript_context)
+    routing = _recipient_analysis(relay)
+    derived = _policy_classification(relay, routing=routing, policy=policy_snapshot)
+    classification = derived["classification"]
+    priority = derived["priority"]
+    rationale = derived["rationale"]
     default_uncertainty = "未发现额外不确定性。"
     if not routing["recipient_identity_known"] and (
         routing["to"] or routing["cc"] or routing["bcc"]
@@ -563,10 +685,8 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
         default_uncertainty = "缺少用户自身邮箱 identity，无法确认是否为唯一收件人。"
     elif routing.get("actual_first_author") and not routing["team_member_match"]["matched"]:
         default_uncertainty = "实际第一作者或团队成员匹配信息不完整。"
-    uncertainty = str(payload.get("uncertainty") or default_uncertainty).strip()
-    recommended_action = str(
-        payload.get("recommended_action") or derived["recommended_action"]
-    ).strip()
+    uncertainty = default_uncertainty
+    recommended_action = derived["recommended_action"]
     triage_payload = {
         "email_ref": email_ref,
         "classification": _required({"value": classification}, "value"),
@@ -575,27 +695,7 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
         "uncertainty": _required({"value": uncertainty}, "value"),
         "recommended_action": _required({"value": recommended_action}, "value"),
     }
-    evidence_has_recipients = any(
-        key in payload
-        for key in (
-            "to",
-            "cc",
-            "bcc",
-            "user_addresses",
-            "my_addresses",
-            "user_email",
-            "first_author",
-            "actual_first_author",
-            "article_first_author",
-            "team_members",
-            "lab_members",
-            "current_follow_up",
-            "followed_up_by",
-            "follow_up_by",
-        )
-    )
-    if evidence_has_recipients:
-        triage_payload.update(routing)
+    triage_payload.update(routing)
     triage = _proposal(
         kind="mail.triage",
         input_id=email_ref,
@@ -609,11 +709,17 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
             "policy_refs": policy_refs,
             "policy_digest": policy_digest,
             "policy_digest_kind": "content",
+            "relay_policy_refs": relay["relay_policy_refs"],
+            "relay_policy_digest": relay["relay_policy_digest"],
+            "relay_policy_digest_scope": RELAY_POLICY_DIGEST_SCOPE,
+            "relay_evidence_schema": relay["relay_evidence_schema"],
+            "context_refs": list(mail_context.refs),
+            "context_digest": mail_context.digest,
+            "context_digest_kind": "content",
+            "manuscript_alias": manuscript_context.get("manuscript_alias"),
             "decision_scope": "proposal_only",
         }
     )
-    if relay_policy_digest:
-        triage["relay_policy_digest"] = relay_policy_digest
     return _bundle(
         "mail",
         email_ref,

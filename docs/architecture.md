@@ -35,15 +35,17 @@ change, sent email, or written vault note.
 
 ## Inbox and Obsidian proposal contracts
 
-`mail.triage` is a policy-bound interpretation of one or more stable
-`email-store://` source references. Persona loads the user's private Markdown
-rules from `OPL_PROFILE_WORKSPACE/policies/` and hashes the selected file bytes,
+`mail.triage` is a policy-bound interpretation of one validated Relay
+`opl-relay-mail-triage-evidence.v2` facts envelope with a canonical
+`email-store://` source reference. Persona loads the user's private Markdown
+rules from `<profile>/policies/` and hashes the selected file bytes,
 not merely a list of policy refs. It records a classification, priority,
 rationale, uncertainty, recommended action, policy references, and a content
-`policy_digest`. Recipient evidence (`to`, `cc`, `bcc`), unique-recipient
-status, actual first-author and team-member matching, forwarding target,
-follow-up owner, and notification suggestion are included when supplied by the
-mail authority. A Relay refs-set digest is retained only as
+`policy_digest`. Recipient evidence (`to`, `cc`, `bcc`) comes only from Relay.
+Persona resolves the user's own addresses, actual first author, team-member
+match, forwarding target, follow-up owner, and notification suggestion from
+the selected Profile's private Markdown context and records a separate
+`context_digest`. A Relay refs-set digest is retained only as
 `relay_policy_digest` provenance and never becomes Persona's content digest.
 The proposal also emits a generic `personal.inbox.v1` capture for Persona's
 private staging provider. The Inbox stores only source refs, a bounded summary,
@@ -65,6 +67,12 @@ tax, and document fields, are maintained in the user's Obsidian vault for
 convenient reuse. Persona keeps only field references, provenance, currentness,
 purpose, and approval state; it does not create a second profile database or
 copy those values into Git, plugin caches, chat history, or App state.
+The vault path is supplied only by a Profile Workspace Resource Binding; Persona
+does not carry a default vault path or environment-variable override.
+The private binding store is
+`<profile>/data/persona/resource-bindings.json`. Callers select a binding by
+opaque id; only the Obsidian owner adapter resolves its `file://` resource ref
+at the point of use.
 
 The detailed contracts are:
 
@@ -87,7 +95,6 @@ when the user configures them.
 
 `OPL_PROFILE_WORKSPACE` selects the user's single Profile Workspace. Persona
 stores its machine-maintained state under `<workspace>/data/persona`; Relay
-uses the sibling `<workspace>/data/relay`. `OPL_PERSONA_HOME` and
-`OPL_PERSONA_WORKSPACE` remain explicit compatibility overrides. When unset,
-Persona uses `~/OPL/profiles/<user>` and its `data/persona` child. The
+uses the sibling `<workspace>/data/relay`. When unset, Persona uses
+`~/OPL/profiles/<user>` and its `data/persona` child. The
 repository, installed plugin, and Package are never data authorities.

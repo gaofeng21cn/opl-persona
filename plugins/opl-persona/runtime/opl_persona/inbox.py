@@ -51,7 +51,8 @@ def _refs(value: object, name: str) -> list[str]:
 
 
 def _default_data_root(environ: Mapping[str, str] | None = None) -> Path:
-    return PersonaPaths.resolve(environ=dict(environ) if environ is not None else None).data_root
+    del environ
+    return PersonaPaths.resolve().data_root
 
 
 @dataclass(frozen=True)

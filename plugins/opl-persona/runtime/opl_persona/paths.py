@@ -5,21 +5,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-PROFILE_WORKSPACE_ENV = "OPL_PROFILE_WORKSPACE"
-PERSONA_HOME_ENV = "OPL_PERSONA_HOME"
-PERSONA_WORKSPACE_ENV = "OPL_PERSONA_WORKSPACE"
 WORKSPACE_SCHEMA = "opl_profile_workspace.v1"
 MARKER_NAME = ".opl-profile-workspace.json"
-LEGACY_MARKER_NAME = ".opl-persona-workspace.json"
+PROFILE_WORKSPACE_ENV = "OPL_PROFILE_WORKSPACE"
 
 
 def default_profile_workspace(environ: dict[str, str] | None = None) -> Path:
+    """Return the selected Profile Workspace or the user's standard default."""
+
     env = os.environ if environ is None else environ
     configured = env.get(PROFILE_WORKSPACE_ENV, "").strip()
     if configured:
         return Path(configured).expanduser()
-    profile_name = Path.home().name or "default"
-    return Path.home() / "OPL" / "profiles" / profile_name
+    home = Path.home()
+    return home / "OPL" / "profiles" / (home.name or "default")
 
 
 @dataclass(frozen=True)
@@ -29,27 +28,11 @@ class PersonaPaths:
 
     @classmethod
     def resolve(cls, *, environ: dict[str, str] | None = None) -> "PersonaPaths":
-        env = os.environ if environ is None else environ
-        data = env.get(PERSONA_HOME_ENV, "").strip()
-        if not data:
-            data = str(default_profile_workspace(env) / "data" / "persona")
-        workspace = env.get(PERSONA_WORKSPACE_ENV, "").strip()
-        if not workspace:
-            workspace = str(default_profile_workspace(env))
-        return cls(Path(data).expanduser(), Path(workspace).expanduser())
-
-    @staticmethod
-    def default_obsidian_vault(environ: dict[str, str] | None = None) -> Path:
-        env = os.environ if environ is None else environ
-        configured = env.get("OPL_PERSONA_OBSIDIAN_VAULT", "").strip()
-        if configured:
-            return Path(configured).expanduser()
-        return Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents"
+        workspace = default_profile_workspace(environ)
+        return cls(workspace / "data" / "persona", workspace)
 
     def doctor(self) -> dict[str, object]:
-        vault = self.default_obsidian_vault()
         marker = self.workspace / MARKER_NAME
-        legacy_marker = self.workspace / LEGACY_MARKER_NAME
         return {
             "ok": True,
             "data_root": str(self.data_root),
@@ -57,11 +40,10 @@ class PersonaPaths:
             "profile_workspace": str(self.workspace),
             "workspace_schema": WORKSPACE_SCHEMA,
             "workspace_marker": str(marker),
-            "workspace_ready": marker.is_file() or legacy_marker.is_file(),
+            "workspace_ready": marker.is_file(),
             "private_data_policy": "runtime_roots_only",
             "source_checkout_is_data_authority": False,
-            "obsidian_vault": str(vault),
-            "obsidian_vault_exists": vault.is_dir(),
+            "obsidian_binding_required": True,
         }
 
     def init_workspace(self) -> dict[str, object]:

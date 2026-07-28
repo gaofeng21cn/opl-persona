@@ -8,8 +8,8 @@ from opl_persona.inbox import InboxStore
 
 
 def test_capture_uses_persona_home_and_stores_refs_summary_only(tmp_path: Path) -> None:
-    data_root = tmp_path / "persona-private"
-    store = InboxStore(environ={"OPL_PERSONA_HOME": str(data_root)})
+    data_root = tmp_path / "profile" / "data" / "persona"
+    store = InboxStore(data_root)
 
     item = store.capture(
         capture_id="paper://doi/10.1000/example",

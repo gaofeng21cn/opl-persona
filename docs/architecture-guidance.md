@@ -79,7 +79,7 @@ modules, not independent product lifecycles.
 Code and private data are physically separate:
 
 ```text
-/Users/gaofeng/workspace/
+~/workspace/
 ├── opl-relay/          # source, plugin, package, tests, docs
 ├── opl-persona/        # source, plugin, package, tests, docs
 ├── one-person-lab/     # OPL base contracts and runtime
@@ -99,10 +99,8 @@ Code and private data are physically separate:
     └── persona/         # Inbox, proposals, approvals and receipts
 ```
 
-The Profile Workspace is selected by `OPL_PROFILE_WORKSPACE`. For compatibility,
-`OPL_RELAY_WORKSPACE` and `OPL_PERSONA_WORKSPACE` may override it per module;
-`OPL_RELAY_HOME` and `OPL_PERSONA_HOME` may override only the corresponding
-module data directory. When no variables are set, the default is
+The Profile Workspace is selected by `OPL_PROFILE_WORKSPACE`. It is the only
+workspace selector. When no selector is injected, the default is
 `~/OPL/profiles/<user>`.
 Obsidian remains an external, user-selected vault. A checkout, installed
 plugin, Package cache, generated fixture, or task worktree is never a data
@@ -204,15 +202,18 @@ The default proposal policy is:
 ```
 
 For an inbox decision, Persona also requires a stable `email-store://`
-evidence reference and the policy evidence used to make the recommendation.
+evidence reference inside a validated `opl-relay-mail-triage-evidence.v2`
+facts-only bridge. Scattered header fields are not a supported Persona input.
 The resulting `mail.triage` proposal contains classification, priority,
 rationale, uncertainty, recommended action, `policy_refs`, and a SHA-256
 content `policy_digest` computed from the selected Persona-workspace Markdown
 bytes; its companion `personal.inbox.v1` capture进入 Persona 私有 staging。
-Relay may include a separate refs-set `relay_policy_digest` as bridge
-provenance, but Persona must reload its own Markdown rules before creating the
-final content digest. Recipient routing evidence can include To/Cc/Bcc,
-actual first author, team-member match, forwarding target, and follow-up owner.
+Relay includes a refs-set digest as bridge provenance, but Persona must reload
+every Markdown file under `<profile>/policies/` before creating the final
+content digest. Missing Markdown fails closed; an external digest cannot
+authorize a bypass. Recipient routing evidence includes To/Cc/Bcc and may
+produce first-author, team-member, forwarding, follow-up, and notification
+fields only when supporting evidence exists.
 该 staging 只保存 source refs、有界摘要、状态与路由，不复制邮件正文，因此不会成为
 第二邮箱。完整条目和 Binding 合同见
 [Composable Capability and Integration Model](integration-capability-composition.md)。

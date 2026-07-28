@@ -6,13 +6,19 @@ contain credentials, tokens, content, or a copy of the authority's data.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Mapping
+from urllib.parse import unquote, urlparse
 
 
 SCHEMA_VERSION = "opl-persona-resource-binding.v1"
+BINDING_STORE_SCHEMA_VERSION = "opl-persona-resource-bindings.v1"
 HEALTH_SCHEMA_VERSION = "opl-persona-resource-health.v1"
+DEFAULT_OBSIDIAN_BINDING_ID = "my-knowledge"
+_BINDING_STORE_NAME = "resource-bindings.json"
 _SENSITIVE_KEY_PARTS = (
     "token",
     "secret",
@@ -186,3 +192,58 @@ def binding_for_resource(
         policy=policy or {},
         health={"status": "unknown", "reason": "not_checked"},
     )
+
+
+def binding_store_path(workspace: Path) -> Path:
+    """Return the private, Profile-owned binding store location."""
+
+    return workspace.expanduser().resolve() / "data" / "persona" / _BINDING_STORE_NAME
+
+
+def load_resource_binding(
+    workspace: Path,
+    binding_id: str,
+) -> ResourceBinding:
+    """Load one binding from the selected Profile Workspace and fail closed."""
+
+    selected_id = _text(binding_id, "binding_id")
+    path = binding_store_path(workspace)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Profile resource binding store not found: {path}") from None
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Profile resource binding store is invalid: {exc}") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError("Profile resource binding store must be an object")
+    if payload.get("schema_version") != BINDING_STORE_SCHEMA_VERSION:
+        raise ValueError(f"binding store schema_version must be {BINDING_STORE_SCHEMA_VERSION}")
+    bindings = payload.get("bindings")
+    if not isinstance(bindings, Mapping):
+        raise ValueError("binding store bindings must be an object")
+    value = bindings.get(selected_id)
+    if not isinstance(value, Mapping):
+        raise KeyError(f"Profile resource binding not found: {selected_id}")
+    return ResourceBinding.from_dict(value)
+
+
+def binding_file_root(
+    binding: ResourceBinding,
+    *,
+    provider_id: str,
+    capability_ids: set[str],
+    required_scope: str,
+) -> Path:
+    """Resolve a local owner root from a refs-only binding."""
+
+    if binding.provider_id != provider_id or binding.capability_id not in capability_ids:
+        raise ValueError(f"binding is not a {provider_id} resource binding")
+    if required_scope not in binding.scopes:
+        raise ValueError(f"binding does not grant {required_scope}")
+    parsed = urlparse(binding.resource_ref)
+    if parsed.scheme != "file" or parsed.netloc not in {"", "localhost"}:
+        raise ValueError("binding resource_ref must be a local file URI")
+    root = Path(unquote(parsed.path)).resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"bound resource root not found: {root}")
+    return root

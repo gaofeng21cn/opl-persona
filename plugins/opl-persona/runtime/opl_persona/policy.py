@@ -9,6 +9,7 @@ proposal can be reproduced and audited even after the workspace changes.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -19,6 +20,9 @@ from .paths import PersonaPaths
 POLICY_DIGEST_ALGORITHM = "sha256"
 DEFAULT_POLICY_REF = "policy://persona/mail-triage/v1"
 _POLICY_ROOT = "policies"
+_EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w.-])")
+_PROFILE_FIELD = re.compile(r"^-\s*([^:]+):\s*(.+?)\s*$")
+_TABLE_ROW = re.compile(r"^\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$")
 
 
 def _digest_path(path: Path, *, workspace: Path) -> str:
@@ -47,47 +51,6 @@ def _canonical_ref(path: Path, *, workspace: Path) -> str:
     if relative.endswith(".md"):
         relative = relative[:-3]
     return f"policy://persona/{relative}"
-
-
-def _inside(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
-
-
-def _resolve_ref(ref: str, *, workspace: Path) -> Path:
-    if not isinstance(ref, str) or not ref.strip():
-        raise ValueError("policy reference must be a non-empty string")
-    value = ref.strip()
-    prefix = "policy://persona/"
-    if not value.startswith(prefix):
-        raise ValueError("policy references must use policy://persona/ identities")
-    tail = value[len(prefix) :].strip("/")
-    if not tail:
-        raise ValueError("policy reference must identify a Markdown file")
-    candidates: list[Path] = []
-    if tail.endswith("/v1"):
-        tail = tail[: -len("/v1")].rstrip("/")
-    raw = Path(tail)
-    candidates.extend(
-        [
-            workspace / raw,
-            workspace / f"{tail}.md",
-            workspace / _POLICY_ROOT / raw,
-            workspace / _POLICY_ROOT / f"{tail}.md",
-        ]
-    )
-    for candidate in candidates:
-        resolved = candidate.expanduser().resolve()
-        if (
-            resolved.is_file()
-            and resolved.suffix.casefold() == ".md"
-            and _inside(resolved, workspace.resolve())
-        ):
-            return resolved
-    raise FileNotFoundError(f"policy reference does not resolve to Markdown: {value}")
 
 
 @dataclass(frozen=True)
@@ -129,42 +92,170 @@ class PolicySnapshot:
         }
 
 
+@dataclass(frozen=True)
+class MailContextSnapshot:
+    """Private Profile facts used only for conservative mail routing."""
+
+    refs: tuple[str, ...]
+    digest: str
+    user_addresses: tuple[str, ...]
+    team_members: tuple[dict[str, str], ...]
+    projects: tuple[dict[str, str], ...]
+
+
+def _markdown_files(workspace: Path, roots: tuple[str, ...]) -> list[Path]:
+    files: list[Path] = []
+    for root_name in roots:
+        root = workspace / root_name
+        if root.is_dir():
+            files.extend(root.rglob("*.md"))
+    return sorted(set(files), key=lambda item: item.relative_to(workspace).as_posix())
+
+
+def _content_digest(paths: Iterable[Path], *, workspace: Path) -> str:
+    return _canonical_digest(paths, workspace=workspace)
+
+
+def _markdown_fields(block: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in block.splitlines():
+        match = _PROFILE_FIELD.match(line.strip())
+        if match:
+            fields[match.group(1).strip().casefold()] = match.group(2).strip()
+    return fields
+
+
+def _project_records(text: str) -> list[dict[str, str]]:
+    sections = re.split(r"(?m)^##\s+", text)
+    records: list[dict[str, str]] = []
+    for section in sections[1:]:
+        heading, _, body = section.partition("\n")
+        fields = _markdown_fields(body)
+        if not fields:
+            continue
+        record = {"alias": heading.strip(), **fields}
+        records.append(record)
+    return records
+
+
+def _team_records(text: str) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    for line in text.splitlines():
+        match = _TABLE_ROW.match(line.strip())
+        if not match:
+            continue
+        name, _role, address = (item.strip() for item in match.groups())
+        if name.casefold() in {"name", "---"} or address in {"", "-", "---"}:
+            continue
+        if not _EMAIL.fullmatch(address):
+            continue
+        records.append({"name": name, "email": address.casefold()})
+    unique: dict[str, dict[str, str]] = {}
+    for record in records:
+        unique.setdefault(record["email"], record)
+    return list(unique.values())
+
+
+def load_mail_context(*, workspace: Path | None = None) -> MailContextSnapshot:
+    """Load Profile-owned identity, manuscript, and roster facts."""
+
+    selected = (workspace or PersonaPaths.resolve().workspace).expanduser().resolve()
+    files = _markdown_files(selected, ("profile", "context"))
+    user_addresses: list[str] = []
+    team_members: list[dict[str, str]] = []
+    projects: list[dict[str, str]] = []
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        relative = path.relative_to(selected).as_posix()
+        if relative.startswith("profile/"):
+            fields = _markdown_fields(text)
+            for name, value in fields.items():
+                if name in {"address", "addresses", "email", "emails", "mail addresses"}:
+                    user_addresses.extend(match.casefold() for match in _EMAIL.findall(value))
+        if relative == "context/people.md":
+            team_members.extend(_team_records(text))
+        if relative == "context/projects.md":
+            projects.extend(_project_records(text))
+    return MailContextSnapshot(
+        refs=tuple(f"profile://persona/{path.relative_to(selected).as_posix()}" for path in files),
+        digest=_content_digest(files, workspace=selected),
+        user_addresses=tuple(dict.fromkeys(user_addresses)),
+        team_members=tuple(team_members),
+        projects=tuple(projects),
+    )
+
+
+def resolve_manuscript_context(
+    snapshot: MailContextSnapshot,
+    *,
+    subject: str,
+    body: str,
+) -> dict[str, object]:
+    """Resolve one manuscript record only when Profile evidence matches."""
+
+    haystack = f"{subject}\n{body}".casefold()
+    ranked: list[tuple[int, dict[str, str]]] = []
+    match_fields = {
+        "alias",
+        "manuscript id",
+        "recent manuscript id",
+        "recent submission id",
+        "article id/doi",
+        "title",
+    }
+    for record in snapshot.projects:
+        candidates = [
+            value.strip()
+            for key, value in record.items()
+            if key in match_fields and len(value.strip()) >= 6
+        ]
+        score = max((len(value) for value in candidates if value.casefold() in haystack), default=0)
+        if score:
+            ranked.append((score, record))
+    if not ranked:
+        return {}
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    if len(ranked) > 1 and ranked[0][0] == ranked[1][0]:
+        return {}
+    record = ranked[0][1]
+    author = next(
+        (
+            record[key]
+            for key in (
+                "actual first author",
+                "actual first/corresponding author",
+                "first listed author",
+            )
+            if record.get(key)
+        ),
+        "",
+    )
+    address = next(
+        (
+            match
+            for key in (
+                "verified routing address",
+                "verified first-author address",
+            )
+            for match in _EMAIL.findall(record.get(key, ""))
+        ),
+        "",
+    )
+    result: dict[str, object] = {"manuscript_alias": record["alias"]}
+    if author:
+        result["actual_first_author"] = {"name": author, "email": address.casefold()} if address else {"name": author}
+    return result
+
+
 def load_markdown_policies(
     *,
     workspace: Path | None = None,
-    refs: Iterable[str] | None = None,
-    paths: Iterable[str | Path] | None = None,
 ) -> PolicySnapshot:
-    """Load selected Markdown rules from a Persona workspace.
-
-    ``refs`` uses stable ``policy://persona/...`` identities.  ``paths`` is
-    useful for a migration or an explicitly reviewed local policy set; relative
-    paths are resolved below ``workspace``.  When neither is supplied, all
-    Markdown files below ``<workspace>/policies`` are selected in lexical
-    order.
-    """
+    """Load every Markdown rule from one Profile Workspace's policies directory."""
 
     selected_workspace = (workspace or PersonaPaths.resolve().workspace).expanduser().resolve()
-    selected: list[Path] = []
-    if refs is not None:
-        for ref in refs:
-            selected.append(_resolve_ref(ref, workspace=selected_workspace))
-    if paths is not None:
-        for raw_path in paths:
-            candidate = Path(raw_path)
-            if not candidate.is_absolute():
-                candidate = selected_workspace / candidate
-            resolved = candidate.expanduser().resolve()
-            if not _inside(resolved, selected_workspace):
-                raise ValueError("policy paths must stay inside the Persona workspace")
-            if not resolved.is_file() or resolved.suffix.casefold() != ".md":
-                raise FileNotFoundError(f"policy path is not a Markdown file: {candidate}")
-            selected.append(resolved)
-    if refs is None and paths is None:
-        policy_root = selected_workspace / _POLICY_ROOT
-        if policy_root.is_dir():
-            selected.extend(sorted(policy_root.rglob("*.md")))
-    unique = sorted(set(selected), key=lambda item: item.relative_to(selected_workspace).as_posix())
+    policy_root = selected_workspace / _POLICY_ROOT
+    unique = sorted(policy_root.rglob("*.md")) if policy_root.is_dir() else []
     if not unique:
         raise FileNotFoundError(f"no Markdown policies found in Persona workspace: {selected_workspace}")
     documents = tuple(
@@ -184,41 +275,14 @@ def load_markdown_policies(
     )
 
 
-def policy_digest_for_files(
-    paths: Iterable[str | Path],
-    *,
-    workspace: Path,
-) -> str:
-    """Return the same digest used by :func:`load_markdown_policies`."""
-
-    selected_workspace = workspace.expanduser().resolve()
-    selected: list[Path] = []
-    for raw_path in paths:
-        candidate = Path(raw_path)
-        if not candidate.is_absolute():
-            candidate = selected_workspace / candidate
-        resolved = candidate.expanduser().resolve()
-        if not _inside(resolved, selected_workspace) or not resolved.is_file():
-            raise FileNotFoundError(f"policy path is not a file in workspace: {candidate}")
-        selected.append(resolved)
-    if not selected:
-        raise ValueError("at least one policy path is required")
-    return _canonical_digest(set(selected), workspace=selected_workspace)
-
-
 class MarkdownPolicyLoader:
     """Convenience owner-bound loader for callers that reuse one workspace."""
 
     def __init__(self, workspace: Path | None = None) -> None:
         self.workspace = (workspace or PersonaPaths.resolve().workspace).expanduser()
 
-    def load(
-        self,
-        *,
-        refs: Iterable[str] | None = None,
-        paths: Iterable[str | Path] | None = None,
-    ) -> PolicySnapshot:
-        return load_markdown_policies(workspace=self.workspace, refs=refs, paths=paths)
+    def load(self) -> PolicySnapshot:
+        return load_markdown_policies(workspace=self.workspace)
 
 
 # Short aliases keep the runtime surface discoverable without duplicating logic.

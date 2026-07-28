@@ -16,6 +16,8 @@ from opl_persona.cli import main
 from opl_persona.inbox import InboxStore
 from opl_persona.paths import PersonaPaths
 
+from relay_v2 import relay_v2_evidence
+
 
 ROOT = Path(__file__).parents[1]
 PLUGIN_ROOT = ROOT / "plugins" / "opl-persona"
@@ -68,7 +70,7 @@ def test_read_returns_typed_unavailable_projection_without_private_data(monkeypa
 
 
 def test_read_projects_persona_private_inbox_refs_only(monkeypatch, capsys, tmp_path: Path) -> None:
-    monkeypatch.setenv("OPL_PERSONA_HOME", str(tmp_path / "persona"))
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
     InboxStore.from_paths(PersonaPaths.resolve()).capture(
         capture_id="paper://demo",
         item_kind="paper",
@@ -134,22 +136,17 @@ def test_execute_never_approves_or_writes_without_owner_handler(monkeypatch, cap
     }
 
 
-def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsys) -> None:
+def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsys, tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    policy = profile / "policies" / "mail-triage.md"
+    policy.parent.mkdir(parents=True)
+    policy.write_text("# Mail rules\n\nPrioritize manuscript matters.", encoding="utf-8")
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
     requests = [
         (
             "communications.mail.v1#triage.propose",
             {
-                "email_ref": "email-store://account/inbox/123",
-                "source_refs": ["email-store://account/inbox/123"],
-                "subject": "Review request",
-                "summary": "Response needed.",
-                "classification": "needs_decision",
-                "priority": "high",
-                "rationale": "A short response window is stated.",
-                "uncertainty": "The deadline is not independently verified.",
-                "recommended_action": "Read and decide.",
-                "policy_refs": ["policy://persona/mail-triage/v1"],
-                "policy_digest": "sha256:" + "a" * 64,
+                "relay_evidence": relay_v2_evidence(),
             },
             ["personal.inbox.v1.capture", "mail.triage"],
         ),
@@ -204,13 +201,14 @@ def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsy
         assert all(item["approval"]["external_write_allowed"] is False for item in bundle["proposals"])
 
 
-def test_mail_triage_app_action_accepts_markdown_policy_and_recipient_evidence(
+def test_mail_triage_app_action_accepts_only_relay_v2_evidence(
     monkeypatch, capsys, tmp_path: Path
 ) -> None:
-    policy = tmp_path / "policies" / "mail-triage.md"
+    profile = tmp_path / "profile"
+    policy = profile / "policies" / "mail-triage.md"
     policy.parent.mkdir(parents=True)
     policy.write_text("# Mail rules\n\n投稿论文优先。", encoding="utf-8")
-    email_ref = "email-store://account/inbox/456"
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
     code, response = run_cli(
         monkeypatch,
         capsys,
@@ -219,17 +217,7 @@ def test_mail_triage_app_action_accepts_markdown_policy_and_recipient_evidence(
             "operation": "execute",
             "ref": "communications.mail.v1#triage.propose",
             "input": {
-                "email_ref": email_ref,
-                "source_refs": [email_ref],
-                "subject": "Manuscript revision",
-                "summary": "A revision deadline needs attention.",
-                "policy_workspace": str(tmp_path),
-                "to": ["gaof57@mail.sysu.edu.cn"],
-                "cc": [],
-                "bcc": [],
-                "user_addresses": ["gaof57@mail.sysu.edu.cn"],
-                "actual_first_author": {"email": "student@example.edu"},
-                "team_members": [{"email": "student@example.edu"}],
+                "relay_evidence": relay_v2_evidence(),
             },
         },
     )
@@ -238,7 +226,7 @@ def test_mail_triage_app_action_accepts_markdown_policy_and_recipient_evidence(
     assert response["ok"] is True
     triage = response["result"]["proposal_bundle"]["proposals"][1]
     assert triage["policy_digest"].startswith("sha256:")
-    assert triage["payload"]["forward_to"]["email"] == "student@example.edu"
+    assert triage["relay_evidence_schema"] == "opl-relay-mail-triage-evidence.v2"
 
 
 def test_execute_rejects_undeclared_proposal_input_fields(monkeypatch, capsys) -> None:

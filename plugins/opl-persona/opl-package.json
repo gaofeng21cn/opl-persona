@@ -49,7 +49,7 @@
       "runtime/opl_persona/policy.py",
       "skills/opl-persona/SKILL.md"
     ],
-    "digest": "sha256:43d6ed0afc48b0108a5dafd0538ff5a04d12705a244ea766469223aad165a7f2"
+    "digest": "sha256:a433704e03d852c75ec1718c4587df84a065aba7939d13efebbed56c90adff13"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

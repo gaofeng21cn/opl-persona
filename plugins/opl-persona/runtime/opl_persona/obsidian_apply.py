@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from .approvals import proposal_digest
-from .bindings import ResourceBinding
+from .bindings import ResourceBinding, binding_file_root
 from .core import OBSIDIAN_NOTE_CONTRACT, build_obsidian_note_proposals
 
 
@@ -93,17 +93,13 @@ def _require_approval(proposal: Mapping[str, Any], approval: Mapping[str, Any]) 
         raise ValueError("approval proposal_digest mismatch")
 
 
-def _binding_vault(binding: ResourceBinding, vault: Path) -> Path:
-    if binding.capability_id not in _CAPABILITY_IDS or binding.provider_id != "obsidian":
-        raise ValueError("binding is not an Obsidian knowledge binding")
-    if "notes.write" not in binding.scopes:
-        raise ValueError("binding does not grant notes.write")
-    root = vault.expanduser().resolve()
-    if not root.is_dir():
-        raise FileNotFoundError(f"Obsidian vault not found: {root}")
-    if binding.resource_ref != root.as_uri():
-        raise ValueError("binding resource_ref does not match the configured vault")
-    return root
+def _binding_vault(binding: ResourceBinding) -> Path:
+    return binding_file_root(
+        binding,
+        provider_id="obsidian",
+        capability_ids=_CAPABILITY_IDS,
+        required_scope="notes.write",
+    )
 
 
 def _yaml_scalar(value: object) -> str:
@@ -183,7 +179,7 @@ def _resolve_target(root: Path, target_path: str) -> Path:
 
 def _atomic_write(path: Path, content: bytes, *, mode: int, expected_digest: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=".opl-persona-note.", suffix=".tmp", dir=path.parent)
+    fd, temporary = tempfile.mkstemp(prefix=".persona-note.", suffix=".tmp", dir=path.parent)
     try:
         os.fchmod(fd, mode)
         with os.fdopen(fd, "wb") as handle:
@@ -215,13 +211,12 @@ def apply_approved_obsidian_note(
     approval: Mapping[str, Any],
     *,
     binding: ResourceBinding,
-    vault: Path,
 ) -> dict[str, Any]:
     """Apply one approved note and return an authority readback receipt."""
 
     payload = _proposal_identity(proposal)
     _require_approval(proposal, approval)
-    root = _binding_vault(binding, vault)
+    root = _binding_vault(binding)
     target = _resolve_target(root, _safe_target_path(payload["target_path"]))
     operation = _required_text(proposal.get("operation"), "operation")
     expected_digest = _required_text(payload.get("expected_digest"), "expected_digest")
