@@ -78,7 +78,9 @@ when the user configures them.
 
 ## Runtime data
 
-`OPL_PERSONA_HOME` is the private data root and `OPL_PERSONA_WORKSPACE` is the
-replaceable human context. When unset, Persona uses `~/.opl-persona` and its
-`workspaces/default` child. The repository, installed plugin, and Package are
-never data authorities.
+`OPL_PROFILE_WORKSPACE` selects the user's single Profile Workspace. Persona
+stores its machine-maintained state under `<workspace>/data/persona`; Relay
+uses the sibling `<workspace>/data/relay`. `OPL_PERSONA_HOME` and
+`OPL_PERSONA_WORKSPACE` remain explicit compatibility overrides. When unset,
+Persona uses `~/OPL/profiles/<user>` and its `data/persona` child. The
+repository, installed plugin, and Package are never data authorities.

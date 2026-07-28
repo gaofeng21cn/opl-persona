@@ -22,8 +22,31 @@ def test_paths_do_not_fall_back_to_relay_home(tmp_path: Path) -> None:
             "HOME": str(tmp_path / "home"),
         }
     )
-    assert paths.data_root == Path.home() / ".opl-persona"
+    assert paths.data_root == Path.home() / "OPL" / "profiles" / Path.home().name / "data" / "persona"
     assert paths.data_root != tmp_path / "relay"
+
+
+def test_paths_share_profile_workspace_when_selected(tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    paths = PersonaPaths.resolve(
+        environ={
+            "OPL_PROFILE_WORKSPACE": str(profile),
+        }
+    )
+    assert paths.workspace == profile
+    assert paths.data_root == profile / "data" / "persona"
+
+
+def test_workspace_init_creates_profile_skeleton(tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    paths = PersonaPaths.resolve(environ={"OPL_PROFILE_WORKSPACE": str(profile)})
+    result = paths.init_workspace()
+
+    assert result["workspace_ready"] is True
+    assert (profile / ".opl-profile-workspace.json").is_file()
+    assert (profile / "profile").is_dir()
+    assert (profile / "data" / "relay").is_dir()
+    assert (profile / "data" / "persona").is_dir()
 
 
 def test_obsidian_note_is_read_only_and_scoped(tmp_path: Path) -> None:

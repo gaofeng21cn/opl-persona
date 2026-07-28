@@ -10,6 +10,11 @@ authority of mail, Obsidian, or `gflab_web`.
 
 ## Runtime boundary
 
+- The user selects one `OPL_PROFILE_WORKSPACE` for the active digital
+  persona. Persona stores machine-maintained state in
+  `<profile>/data/persona`; Relay uses the sibling `<profile>/data/relay`.
+- `OPL_PERSONA_HOME` and `OPL_PERSONA_WORKSPACE` are compatibility overrides,
+  not separate user identities or installation directories.
 - Do not assume a global `opl-persona` launcher exists. Call the installed
   Package through `opl app contribution read` or `opl app contribution execute`
   with `--package-id opl-persona` and an exactly declared reference.

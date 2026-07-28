@@ -51,9 +51,7 @@ def _refs(value: object, name: str) -> list[str]:
 
 
 def _default_data_root(environ: Mapping[str, str] | None = None) -> Path:
-    env = os.environ if environ is None else environ
-    configured = str(env.get("OPL_PERSONA_HOME", "")).strip()
-    return Path(configured).expanduser() if configured else Path.home() / ".opl-persona"
+    return PersonaPaths.resolve(environ=dict(environ) if environ is not None else None).data_root
 
 
 @dataclass(frozen=True)

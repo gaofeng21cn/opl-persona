@@ -11,7 +11,9 @@ feature belongs in Persona, Relay, OPL App, or an authority-owned repository.
 
 Persona does not own mail, Obsidian, or website data. Those systems remain the
 authorities for their own content. Persona stores only contracts, reasoning
-inputs, provenance, and proposal state under a user-selected data root.
+inputs, provenance, and proposal state under the user's Profile Workspace:
+`<profile>/data/persona`. Relay uses the sibling `<profile>/data/relay`; the
+installed Plugin and Package never contain user data.
 
 ## v1 workflow
 

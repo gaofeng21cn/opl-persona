@@ -56,8 +56,8 @@ Persona、站点适配器和浏览器/API 的职责必须分开：
 资料提供。Persona workspace 中只保留门户访问引用和策略，密钥由原生安全存储保存：
 
 ```text
-~/.opl-persona/
-└── workspaces/default/
+~/OPL/profiles/<user>/
+└── profile/
     ├── access/sites/<site-id>.yaml       # account、role、secret/browser ref、scope
     ├── policies/external-work.yaml        # 默认审批和数据保留规则
     └── roles/academic-service.yaml        # 编辑、审稿等角色的用户可读政策

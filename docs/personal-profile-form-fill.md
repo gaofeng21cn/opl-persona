@@ -55,7 +55,7 @@ proposal log 或 OPL App durable state。需要在外部表格中使用时，只
 Persona workspace 只保存可审计的引用和 policy：
 
 ```text
-~/.opl-persona/workspaces/default/
+~/OPL/profiles/<user>/
 ├── profile/field-registry.yaml       # field id、classification、value/source ref
 ├── profile/policies.yaml             # 用途、核验和审批规则
 └── profile/form-maps/                # 可版本化的表单字段映射；无个人值

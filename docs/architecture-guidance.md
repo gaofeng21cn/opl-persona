@@ -87,13 +87,23 @@ Code and private data are physically separate:
 ├── opl-aion-shell/     # desktop implementation
 └── gflab_web/          # website source and deployment configuration
 
-~/.opl-relay/           # Relay private runtime data
-~/.opl-persona/         # Persona private runtime data
-  └── workspaces/default/
+~/OPL/profiles/gaofeng/ # one user-owned Profile Workspace
+├── AGENTS.md
+├── profile/             # identity and profile references
+├── policies/            # user processing rules
+├── context/             # durable working context
+├── templates/
+├── exports/
+└── data/
+    ├── relay/           # mail, memory, draft and sync state
+    └── persona/         # Inbox, proposals, approvals and receipts
 ```
 
-The exact home directory is configurable through `OPL_RELAY_HOME`,
-`OPL_RELAY_WORKSPACE`, `OPL_PERSONA_HOME`, and `OPL_PERSONA_WORKSPACE`.
+The Profile Workspace is selected by `OPL_PROFILE_WORKSPACE`. For compatibility,
+`OPL_RELAY_WORKSPACE` and `OPL_PERSONA_WORKSPACE` may override it per module;
+`OPL_RELAY_HOME` and `OPL_PERSONA_HOME` may override only the corresponding
+module data directory. When no variables are set, the default is
+`~/OPL/profiles/<user>`.
 Obsidian remains an external, user-selected vault. A checkout, installed
 plugin, Package cache, generated fixture, or task worktree is never a data
 authority.
