@@ -85,24 +85,23 @@ For the complete proposal contract and owner boundaries, see
 ## Use With Codex
 
 This repository ships a Codex Plugin carrier. Codex can add the marketplace
-from a local checkout or from this Git repository. Its current marketplace
-identifier is `opl-persona-local`, including when Codex fetches the marketplace
-from Git.
+from a local checkout or from this Git repository. The marketplace identifier
+is `opl-persona` in both cases.
 
 From a local checkout:
 
 ```bash
 codex plugin marketplace add "$(pwd -P)" --json
-codex plugin list --marketplace opl-persona-local --available --json
-codex plugin add opl-persona@opl-persona-local --json
+codex plugin list --marketplace opl-persona --available --json
+codex plugin add opl-persona@opl-persona --json
 ```
 
 From Git, using credentials that can read this repository:
 
 ```bash
 codex plugin marketplace add git@github.com:gaofeng21cn/opl-persona.git --ref main --json
-codex plugin list --marketplace opl-persona-local --available --json
-codex plugin add opl-persona@opl-persona-local --json
+codex plugin list --marketplace opl-persona --available --json
+codex plugin add opl-persona@opl-persona --json
 ```
 
 After installation, start a new Codex task so it loads the installed Plugin
@@ -113,8 +112,8 @@ does not silently edit mail, an Obsidian vault, or a website.
 To refresh a Git marketplace snapshot, then reinstall the Plugin snapshot:
 
 ```bash
-codex plugin marketplace upgrade opl-persona-local --json
-codex plugin add opl-persona@opl-persona-local --json
+codex plugin marketplace upgrade opl-persona --json
+codex plugin add opl-persona@opl-persona --json
 ```
 
 ## Distribution Status

@@ -1,7 +1,7 @@
 {
-  "name": "opl-persona-local",
+  "name": "opl-persona",
   "interface": {
-    "displayName": "OPL Persona Local"
+    "displayName": "OPL Persona"
   },
   "plugins": [
     {

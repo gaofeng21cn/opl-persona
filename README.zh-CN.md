@@ -29,9 +29,9 @@ OPL Persona 让邮件、个人知识、专业背景和公开工作之间保持�
 Persona 是判断与协调层，不是邮件客户端，不是第二个 Obsidian 知识库，也不是网站内容管理
 系统。
 
-## Profile Workspace
+## 分身工作空间
 
-每个数字分身对应一个由用户拥有的 **Profile Workspace（分身工作空间）**。它保存这个人的
+每个数字分身对应一个由用户拥有的 **分身工作空间（Profile Workspace）**。它保存这个人的
 私有资料上下文、偏好、策略、提案状态和模块维护数据。典型结构如下：
 
 ```text
@@ -72,23 +72,23 @@ opl-persona doctor
 
 ## 在 Codex 中使用
 
-本仓包含一个 Codex 插件载体。Codex 既可以从本地检出目录添加插件市场，也可以从 Git 仓库
-读取。当前插件市场标识为 `opl-persona-local`；Codex 从 Git 拉取时仍使用这个标识。
+本仓包含一个 Codex 插件（Codex Plugin）。Codex 既可以从本地检出目录添加插件市场，也可以
+从 Git 仓库读取。两种方式都使用正式插件市场标识 `opl-persona`。
 
 从本地检出目录安装：
 
 ```bash
 codex plugin marketplace add "$(pwd -P)" --json
-codex plugin list --marketplace opl-persona-local --available --json
-codex plugin add opl-persona@opl-persona-local --json
+codex plugin list --marketplace opl-persona --available --json
+codex plugin add opl-persona@opl-persona --json
 ```
 
 从 Git 安装时，需要使用具有本仓读取权限的凭据：
 
 ```bash
 codex plugin marketplace add git@github.com:gaofeng21cn/opl-persona.git --ref main --json
-codex plugin list --marketplace opl-persona-local --available --json
-codex plugin add opl-persona@opl-persona-local --json
+codex plugin list --marketplace opl-persona --available --json
+codex plugin add opl-persona@opl-persona --json
 ```
 
 安装后请新开一个 Codex 任务，使其加载已安装的插件快照。日常使用时，直接用自然语言
@@ -98,8 +98,8 @@ codex plugin add opl-persona@opl-persona-local --json
 若通过 Git 插件市场使用，可先刷新快照，再重新安装插件：
 
 ```bash
-codex plugin marketplace upgrade opl-persona-local --json
-codex plugin add opl-persona@opl-persona-local --json
+codex plugin marketplace upgrade opl-persona --json
+codex plugin add opl-persona@opl-persona --json
 ```
 
 ## 当前分发状态
@@ -109,7 +109,7 @@ codex plugin add opl-persona@opl-persona-local --json
 | 路径 | 当前状态 | 含义 |
 | --- | --- | --- |
 | Codex 插件 | 已可通过本地检出目录或 Git 插件市场快照安装 | 让 Codex 安装 Persona 的专业能力入口。 |
-| OPL 托管能力包 | 规划中 | 未来由 OPL App 通过统一能力包生命周期完成发现、安装、更新、修复和卸载。 |
+| OPL 托管能力包（OPL managed Package） | 规划中 | 未来由 OPL App 通过统一能力包生命周期完成发现、安装、更新、修复和卸载。 |
 
 GitHub 仓库当前是代码来源和 Codex 插件市场的输入，**尚不是** OPL 托管能力包发布
 通道。因此，现在不能宣称 OPL App 已经可以为 Persona 自动远程安装或更新。目标发布通道将由
@@ -125,8 +125,9 @@ python3 -m pytest -q
 actionlint .github/workflows/ci.yml
 ```
 
-发布前，维护者还应运行当前 Codex Plugin Creator 提供的官方 `validate_plugin.py`；其安装路径
-不会硬编码到本仓。GitHub Actions 还会在测试之外运行可移植的结构检查。
+发布前，维护者还应运行 Codex 官方插件创建工具（Plugin Creator）提供的
+`validate_plugin.py`；其安装路径不会硬编码到本仓。GitHub Actions 还会在测试之外运行可移植的
+结构检查。
 
 ## 许可证
 

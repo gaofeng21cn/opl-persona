@@ -44,7 +44,7 @@ jobs:
           assert plugin["version"]
           assert (plugin_root / plugin["skills"]).is_dir()
           assert (plugin_root / "opl-package.json").is_file()
-          assert marketplace["name"] == "opl-persona-local"
+          assert marketplace["name"] == "opl-persona"
           assert any(item["name"] == "opl-persona" for item in marketplace["plugins"])
           PY
 
