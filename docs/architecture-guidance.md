@@ -60,7 +60,7 @@ system keeps its own source of truth.
 | `opl-relay` | Mail identities, evidence, relationship memory, draft lifecycle, send receipts | Persona orchestration, website CMS, Obsidian vault |
 | `opl-persona` | PI context, provenance, cross-domain proposal shape and proposal state | Mail store, private vault, website source, credentials |
 | `gflab_web` | Public publication/news source, Hugo build, deployment source | Private Persona state or mail state |
-| Obsidian vault | Private notes and technical memos | Public website or mail delivery |
+| Obsidian vault | Private notes, technical memos, and all user-maintained personal profile values | Public website or mail delivery |
 | Mail provider / Apple Mail | Mailbox and final send state | Persona proposal state |
 
 Do not create separate repositories for a Relay UI, Persona UI, shared core,
@@ -130,6 +130,14 @@ Obsidian technical memo
 Persona can maintain proposal state and provenance, but an accepted proposal is
 still not an external write until the owning adapter executes it and reads back
 the resulting authority.
+
+For personal profile and external professional work, Obsidian is the authority
+for the user's maintained profile values, including identity, employment,
+contact, payment, tax, and document fields. Persona only coordinates field
+references, provenance, currentness, purpose, and reviewable form proposals.
+The detailed boundaries live in [Personal Profile and Form Fill](personal-profile-form-fill.md)
+and [External Professional Work](external-professional-work.md). Portal login
+credentials and authenticated sessions remain a separate access concern.
 
 ### OPL App and Shell
 

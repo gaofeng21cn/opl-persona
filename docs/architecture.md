@@ -12,7 +12,7 @@ store, knowledge vault, or website CMS.
 | Surface | Authority |
 | --- | --- |
 | OPL Relay | mail identities, raw mail evidence, memory evidence, drafts, send receipts |
-| Obsidian | private notes and memo content |
+| Obsidian | private notes, memo content, and all user-maintained personal profile values |
 | `gflab_web` | public publication/news content and deployment |
 | OPL Persona | shared PI context, provenance, proposal shape, approval state |
 
@@ -25,6 +25,7 @@ publication -> knowledge.ingest + website.publication
 Obsidian memo -> website.article + mail.draft_context
 mail evidence -> personal.inbox.v1 capture + mail.triage
 knowledge input -> knowledge.obsidian.note.v1 create/update proposal
+personal profile -> personal.form.* draft/fill proposal
 ```
 
 Each proposal contains a stable id, an explicit target, payload, source
@@ -47,6 +48,24 @@ and a target precondition: `expected_digest` is `absent` for creation or the
 current SHA-256 digest for update. Persona has no apply operation. The note
 adapter must check that precondition after the user approves the exact proposal
 and before any vault write.
+
+## Personal profile and external professional work
+
+Personal profile values, including identity, employment, contact, payment,
+tax, and document fields, are maintained in the user's Obsidian vault for
+convenient reuse. Persona keeps only field references, provenance, currentness,
+purpose, and approval state; it does not create a second profile database or
+copy those values into Git, plugin caches, chat history, or App state.
+
+The detailed contracts are:
+
+- [Personal Profile and Form Fill](personal-profile-form-fill.md) — the
+  `personal_profile` and `form_fill` Core boundary and form adapters.
+- [External Professional Work](external-professional-work.md) — third-party
+  professional portals, task scope, and per-action approval.
+
+Portal login credentials and authenticated browser sessions remain separate
+from personal profile values and follow the portal access policy.
 
 ## Runtime data
 
