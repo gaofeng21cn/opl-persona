@@ -197,8 +197,10 @@ For an inbox decision, Persona also requires a stable `email-store://`
 evidence reference and the policy evidence used to make the recommendation.
 The resulting `mail.triage` proposal contains classification, priority,
 rationale, uncertainty, recommended action, `policy_refs`, and a SHA-256
-`policy_digest`; its companion `personal.inbox.v1` capture is only a visual
-projection proposal, never a second mailbox.
+`policy_digest`; its companion `personal.inbox.v1` capture进入 Persona 私有 staging。
+该 staging 只保存 source refs、有界摘要、状态与路由，不复制邮件正文，因此不会成为
+第二邮箱。完整条目和 Binding 合同见
+[Composable Capability and Integration Model](integration-capability-composition.md)。
 
 For Obsidian, `knowledge.obsidian.note.v1` can propose exactly one `create` or
 `update`. It carries a relative `target_path`, frontmatter, body, links, tags,
@@ -244,11 +246,18 @@ The first vertical slice is intentionally conservative:
 
 1. Relay Core, Plugin, Package, and Apple Mail review lifecycle are available.
 2. Persona Core, Plugin, Package, and proposal contracts are available.
-3. The `gflab_web` adapter is proposal-only and does not edit content or deploy.
+3. The `gflab_web` owner adapter can bind an exact approved proposal to a
+   linked, non-default local Git worktree, apply the content, run Hugo
+   validation, and return a local digest readback. It cannot commit, push,
+   create a pull request, or deploy; local apply is not publication.
 4. Relay can read Persona mail-context proposals without creating or sending a
-   message.
-5. OPL App has Persona contribution fixtures and contract tests; production
-   navigation and Shell rendering remain separate acceptance gates.
+   message. Relay still creates the Apple Mail draft, the user reviews it,
+   Relay re-inspects its current fingerprint, and an explicit confirmation is
+   required before send and send readback.
+5. Framework discovery, status/action projection, and role-neutral contribution
+   routing can discover Relay and Persona. Semantic App/Shell view rendering,
+   unified approvals, Binding health UI, and carrier mutation controls remain
+   separate acceptance gates.
 
 The next implementation work should connect these existing surfaces through
 fresh installation and runtime readback. It must not weaken proposal approval or
