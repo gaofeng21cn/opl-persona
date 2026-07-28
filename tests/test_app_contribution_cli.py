@@ -13,6 +13,8 @@ from opl_persona.app_contributions import (
     RESPONSE_SCHEMA,
 )
 from opl_persona.cli import main
+from opl_persona.inbox import InboxStore
+from opl_persona.paths import PersonaPaths
 
 
 ROOT = Path(__file__).parents[1]
@@ -63,6 +65,46 @@ def test_read_returns_typed_unavailable_projection_without_private_data(monkeypa
         "reason": "Persona has no configured read-model store for this contribution.",
         "data": None,
     }
+
+
+def test_read_projects_persona_private_inbox_refs_only(monkeypatch, capsys, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPL_PERSONA_HOME", str(tmp_path / "persona"))
+    InboxStore.from_paths(PersonaPaths.resolve()).capture(
+        capture_id="paper://demo",
+        item_kind="paper",
+        title="Demo paper",
+        summary="A bounded summary.",
+        source_refs=["https://example.org/paper"],
+    )
+
+    code, response = run_cli(
+        monkeypatch,
+        capsys,
+        {
+            "schema_version": REQUEST_SCHEMA,
+            "operation": "read",
+            "ref": "personal.inbox.v1#recent",
+            "input": {},
+        },
+    )
+
+    assert code == 0
+    result = response["result"]
+    assert result["state"] == "ready"
+    assert result["data"]["count"] == 1
+    assert result["data"]["items"][0] == {
+        "item_id": result["data"]["items"][0]["item_id"],
+        "capture_id": "paper://demo",
+        "item_kind": "paper",
+        "title": "Demo paper",
+        "summary": "A bounded summary.",
+        "source_refs": ["https://example.org/paper"],
+        "status": "staged",
+        "route_refs": [],
+        "created_at": result["data"]["items"][0]["created_at"],
+        "updated_at": result["data"]["items"][0]["updated_at"],
+    }
+    assert "body" not in result["data"]["items"][0]
 
 
 def test_execute_never_approves_or_writes_without_owner_handler(monkeypatch, capsys) -> None:
@@ -218,6 +260,7 @@ def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
     assert set(DATA_CONTRACTS) == {
         "personal.context.v1#today",
         "personal.context.v1#proposals",
+        "personal.inbox.v1#recent",
     }
     assert set(ACTION_CONTRACTS) == {
         "personal.context.v1#proposal.inspect",
