@@ -20,6 +20,7 @@
     "core_module_ids": [
       "personal.context.v1",
       "personal.memory.v1",
+      "personal.inbox.v1",
       "knowledge.obsidian.v1",
       "communications.mail.v1",
       "website.publication.v1"
@@ -43,7 +44,7 @@
       "runtime/opl_persona/paths.py",
       "skills/opl-persona/SKILL.md"
     ],
-    "digest": "sha256:b1c8ecf1d0be8fbc27051680b4bd80b0898a1995d03fcc08ce029f2c7749df3c"
+    "digest": "sha256:0c7d936eeec35164bcda2c3d9ce505b4061ea9658ef38d3820fd6d14cd8785f5"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
@@ -109,7 +110,10 @@
         "data_ref": "personal.context.v1#proposals",
         "command_ids": [
           "persona.proposal.inspect",
-          "persona.proposal.approve"
+          "persona.proposal.approve",
+          "persona.mail.triage",
+          "persona.inbox.capture",
+          "persona.obsidian.note.propose"
         ],
         "empty_state_i18n": {
           "zh-CN": "暂无待审核提案",
@@ -134,6 +138,30 @@
         },
         "action_ref": "personal.context.v1#proposal.approve",
         "confirmation_required": true
+      },
+      {
+        "command_id": "persona.mail.triage",
+        "label_i18n": {
+          "zh-CN": "生成邮件分诊提案",
+          "en-US": "Propose mail triage"
+        },
+        "action_ref": "communications.mail.v1#triage.propose"
+      },
+      {
+        "command_id": "persona.inbox.capture",
+        "label_i18n": {
+          "zh-CN": "捕获到通用收件箱",
+          "en-US": "Capture to personal inbox"
+        },
+        "action_ref": "personal.inbox.v1#capture.propose"
+      },
+      {
+        "command_id": "persona.obsidian.note.propose",
+        "label_i18n": {
+          "zh-CN": "生成 Obsidian 笔记提案",
+          "en-US": "Propose Obsidian note"
+        },
+        "action_ref": "knowledge.obsidian.v1#note.propose"
       }
     ]
   }

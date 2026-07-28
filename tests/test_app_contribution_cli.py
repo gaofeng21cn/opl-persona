@@ -92,6 +92,107 @@ def test_execute_never_approves_or_writes_without_owner_handler(monkeypatch, cap
     }
 
 
+def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsys) -> None:
+    requests = [
+        (
+            "communications.mail.v1#triage.propose",
+            {
+                "email_ref": "email-store://account/inbox/123",
+                "source_refs": ["email-store://account/inbox/123"],
+                "subject": "Review request",
+                "summary": "Response needed.",
+                "classification": "needs_decision",
+                "priority": "high",
+                "rationale": "A short response window is stated.",
+                "uncertainty": "The deadline is not independently verified.",
+                "recommended_action": "Read and decide.",
+                "policy_refs": ["policy://persona/mail-triage/v1"],
+                "policy_digest": "sha256:" + "a" * 64,
+            },
+            ["personal.inbox.v1.capture", "mail.triage"],
+        ),
+        (
+            "personal.inbox.v1#capture.propose",
+            {
+                "capture_id": "knowledge://memo/1",
+                "item_kind": "knowledge",
+                "title": "New memo",
+                "summary": "A memo ready for review.",
+                "source_refs": ["obsidian://vault/memo.md"],
+            },
+            ["personal.inbox.v1.capture"],
+        ),
+        (
+            "knowledge.obsidian.v1#note.propose",
+            {
+                "operation": "create",
+                "target_path": "Knowledge/new-note.md",
+                "frontmatter": {"title": "New note"},
+                "body": "# New note",
+                "links": [],
+                "tags": ["policy"],
+                "evidence_refs": ["obsidian://vault/memo.md"],
+                "expected_digest": "absent",
+            },
+            ["knowledge.obsidian.note.v1"],
+        ),
+    ]
+
+    for ref, proposal_input, proposal_kinds in requests:
+        code, response = run_cli(
+            monkeypatch,
+            capsys,
+            {
+                "schema_version": REQUEST_SCHEMA,
+                "operation": "execute",
+                "ref": ref,
+                "input": proposal_input,
+            },
+        )
+
+        assert code == 0
+        assert response["ok"] is True
+        assert response["ref"] == ref
+        assert response["result"]["kind"] == "proposal"
+        assert response["result"]["status"] == "proposed"
+        assert response["result"]["execution_policy"] == "proposal_only"
+        assert response["result"]["result_schema"] == ACTION_CONTRACTS[ref]["result"]
+        bundle = response["result"]["proposal_bundle"]
+        assert [item["proposal_kind"] for item in bundle["proposals"]] == proposal_kinds
+        assert all(item["approval"]["external_write_allowed"] is False for item in bundle["proposals"])
+
+
+def test_execute_rejects_undeclared_proposal_input_fields(monkeypatch, capsys) -> None:
+    code, response = run_cli(
+        monkeypatch,
+        capsys,
+        {
+            "schema_version": REQUEST_SCHEMA,
+            "operation": "execute",
+            "ref": "personal.inbox.v1#capture.propose",
+            "input": {
+                "capture_id": "knowledge://memo/1",
+                "item_kind": "knowledge",
+                "title": "New memo",
+                "summary": "A memo ready for review.",
+                "source_refs": ["obsidian://vault/memo.md"],
+                "vault_path": "/private/vault",
+            },
+        },
+    )
+
+    assert code == 2
+    assert response == {
+        "schema_version": RESPONSE_SCHEMA,
+        "ok": False,
+        "ref": "personal.inbox.v1#capture.propose",
+        "error": {
+            "code": "invalid_request",
+            "message": "input contains unsupported fields: vault_path",
+        },
+    }
+
+
 def test_undeclared_ref_is_rejected(monkeypatch, capsys) -> None:
     code, response = run_cli(
         monkeypatch,
@@ -121,6 +222,9 @@ def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
     assert set(ACTION_CONTRACTS) == {
         "personal.context.v1#proposal.inspect",
         "personal.context.v1#proposal.approve",
+        "communications.mail.v1#triage.propose",
+        "personal.inbox.v1#capture.propose",
+        "knowledge.obsidian.v1#note.propose",
     }
 
 
@@ -131,8 +235,15 @@ def test_installed_carrier_wrapper_serves_abi_without_the_source_checkout(tmp_pa
     wrapper.chmod(0o755)
     request = {
         "schema_version": REQUEST_SCHEMA,
-        "operation": "describe",
-        "ref": "personal.context.v1#today",
+        "operation": "execute",
+        "ref": "personal.inbox.v1#capture.propose",
+        "input": {
+            "capture_id": "knowledge://memo/1",
+            "item_kind": "knowledge",
+            "title": "New memo",
+            "summary": "A memo ready for review.",
+            "source_refs": ["obsidian://vault/memo.md"],
+        },
     }
     environment = os.environ | {"PYTHONPATH": ""}
     result = subprocess.run(
@@ -150,3 +261,5 @@ def test_installed_carrier_wrapper_serves_abi_without_the_source_checkout(tmp_pa
     assert response["schema_version"] == RESPONSE_SCHEMA
     assert response["ok"] is True
     assert response["ref"] == request["ref"]
+    assert response["result"]["execution_policy"] == "proposal_only"
+    assert response["result"]["proposal_bundle"]["proposals"][0]["target"] == "personal.inbox.v1"

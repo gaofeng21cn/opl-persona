@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
+
+from .core import (
+    build_inbox_capture_proposals,
+    build_mail_triage_proposals,
+    build_obsidian_note_proposals,
+)
 
 
 ABI_SCHEMA = "opl-package-app-contribution-cli.v1"
@@ -39,6 +46,62 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
         },
         "result": "personal.context.v1#proposal.approve.result",
     },
+    "communications.mail.v1#triage.propose": {
+        "operation": "execute",
+        "confirmation_required": False,
+        "input": {
+            "email_ref": {"type": "string", "required": True},
+            "source_refs": {"type": "string_list", "required": True},
+            "subject": {"type": "string", "required": True},
+            "summary": {"type": "string", "required": True},
+            "classification": {"type": "string", "required": True},
+            "priority": {"type": "string", "required": True},
+            "rationale": {"type": "string", "required": True},
+            "uncertainty": {"type": "string", "required": True},
+            "recommended_action": {"type": "string", "required": True},
+            "policy_refs": {"type": "string_list", "required": True},
+            "policy_digest": {"type": "string", "required": True},
+        },
+        "result": "communications.mail.v1#triage.propose.result",
+    },
+    "personal.inbox.v1#capture.propose": {
+        "operation": "execute",
+        "confirmation_required": False,
+        "input": {
+            "capture_id": {"type": "string", "required": True},
+            "item_kind": {"type": "string", "required": True},
+            "title": {"type": "string", "required": True},
+            "summary": {"type": "string", "required": True},
+            "source_refs": {"type": "string_list", "required": True},
+        },
+        "result": "personal.inbox.v1#capture.propose.result",
+    },
+    "knowledge.obsidian.v1#note.propose": {
+        "operation": "execute",
+        "confirmation_required": False,
+        "input": {
+            "operation": {
+                "type": "string",
+                "required": True,
+                "enum": ["create", "update"],
+            },
+            "target_path": {"type": "string", "required": True},
+            "frontmatter": {"type": "object", "required": True},
+            "body": {"type": "string", "required": True},
+            "links": {"type": "string_list", "required": True},
+            "tags": {"type": "string_list", "required": True},
+            "evidence_refs": {"type": "string_list", "required": True},
+            "expected_digest": {"type": "string", "required": True},
+        },
+        "result": "knowledge.obsidian.v1#note.propose.result",
+    },
+}
+
+
+PROPOSAL_BUILDERS: dict[str, Callable[[dict[str, object]], dict[str, Any]]] = {
+    "communications.mail.v1#triage.propose": build_mail_triage_proposals,
+    "personal.inbox.v1#capture.propose": build_inbox_capture_proposals,
+    "knowledge.obsidian.v1#note.propose": build_obsidian_note_proposals,
 }
 
 
@@ -79,8 +142,27 @@ def _validate_input(value: dict[str, object], contract: dict[str, Any]) -> None:
         assert isinstance(schema, dict)
         if schema["required"] and name not in value:
             raise ValueError(f"input.{name} is required")
-        if name in value and (not isinstance(value[name], str) or not value[name].strip()):
-            raise ValueError(f"input.{name} must be a non-empty string")
+        if name not in value:
+            continue
+        field_value = value[name]
+        field_type = schema["type"]
+        if field_type == "string":
+            if not isinstance(field_value, str) or not field_value.strip():
+                raise ValueError(f"input.{name} must be a non-empty string")
+            allowed = schema.get("enum")
+            if allowed is not None and field_value not in allowed:
+                raise ValueError(f"input.{name} must be one of: {', '.join(allowed)}")
+        elif field_type == "string_list":
+            if (
+                not isinstance(field_value, list)
+                or not all(isinstance(item, str) and item.strip() for item in field_value)
+            ):
+                raise ValueError(f"input.{name} must be a list of non-empty strings")
+        elif field_type == "object":
+            if not isinstance(field_value, dict):
+                raise ValueError(f"input.{name} must be an object")
+        else:
+            raise ValueError(f"input.{name} has an unsupported contract type")
 
 
 def _unavailable_data(contract: dict[str, Any]) -> dict[str, object]:
@@ -103,6 +185,18 @@ def _unavailable_action(contract: dict[str, Any]) -> dict[str, object]:
         "result_schema": contract["result"],
         "execution_policy": "owner_handler_required",
         "reason": "Persona has no configured proposal action handler for this contribution.",
+    }
+
+
+def _proposal_result(contract: dict[str, Any], proposal_bundle: dict[str, Any]) -> dict[str, object]:
+    return {
+        "kind": "proposal",
+        "status": "proposed",
+        "confirmation_required": contract["confirmation_required"],
+        "input_schema": contract["input"],
+        "result_schema": contract["result"],
+        "execution_policy": "proposal_only",
+        "proposal_bundle": proposal_bundle,
     }
 
 
@@ -153,7 +247,15 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
         if contract is None:
             raise ValueError(f"{ref} does not support {operation}")
         _validate_input(_request_input(request.get("input")), contract)
-        result = _unavailable_data(contract) if operation == "read" else _unavailable_action(contract)
+        if operation == "read":
+            result = _unavailable_data(contract)
+        else:
+            builder = PROPOSAL_BUILDERS.get(ref)
+            result = (
+                _proposal_result(contract, builder(_request_input(request.get("input"))))
+                if builder is not None
+                else _unavailable_action(contract)
+            )
         return 0, _response(ref, operation, result)
     except ValueError as exc:
         return 2, _error(ref, str(exc))

@@ -18,6 +18,7 @@ RUNTIME_ROOT = PLUGIN_ROOT / "runtime" / "opl_persona"
 CAPABILITY_IDS = {
     "personal.context.v1",
     "personal.memory.v1",
+    "personal.inbox.v1",
     "knowledge.obsidian.v1",
     "communications.mail.v1",
     "website.publication.v1",
@@ -25,6 +26,9 @@ CAPABILITY_IDS = {
 ACTION_REFS = {
     "personal.context.v1#proposal.inspect",
     "personal.context.v1#proposal.approve",
+    "communications.mail.v1#triage.propose",
+    "personal.inbox.v1#capture.propose",
+    "knowledge.obsidian.v1#note.propose",
 }
 
 
