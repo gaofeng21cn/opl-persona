@@ -27,6 +27,13 @@ OPL App        user-facing host, chat, navigation, views, approvals
 OPL Packages   installable domain capabilities such as Relay and Persona
 ```
 
+Packages are distribution carriers, not a synonym for one domain ability. The
+internal composition model separates Package, Capability Contract, Provider
+Adapter, user Resource Binding, and Persona Recipe. This keeps mail, knowledge,
+website, form, and portal modules optional and replaceable without adding a
+fourth public product layer. See
+[Composable Capability and Integration Model](integration-capability-composition.md).
+
 Codex CLI, Codex App, and `app-server` are execution surfaces used by the
 platform. They are not additional domain authorities. Shell implementation is
 an OPL App delivery concern, not a new product layer.
@@ -223,6 +230,13 @@ Each domain repository may provide three related surfaces:
 The Plugin and Package are carriers. They must not own private state, secrets,
 or an alternate database. The OPL platform owns installation and lifecycle;
 the domain Core owns domain semantics; OPL App owns rendering.
+
+Capability declarations describe stable semantics such as mail, knowledge, or
+site publication. Provider adapters implement those semantics; private Resource
+Bindings select the user's actual mailbox, vault, site, or portal; Persona
+Recipes combine the selected bindings for roles such as PI, academic editor, or
+reviewer. Installation alone never proves that a Binding is configured,
+authorized, healthy, or capable of external writes.
 
 ## Current implementation phase
 

@@ -59,6 +59,8 @@ copy those values into Git, plugin caches, chat history, or App state.
 
 The detailed contracts are:
 
+- [Composable Capability and Integration Model](integration-capability-composition.md)
+  — Package、Capability、Provider、Binding 与 Persona Recipe 的组合边界。
 - [Personal Profile and Form Fill](personal-profile-form-fill.md) — the
   `personal_profile` and `form_fill` Core boundary and form adapters.
 - [External Professional Work](external-professional-work.md) — third-party
@@ -66,6 +68,11 @@ The detailed contracts are:
 
 Portal login credentials and authenticated browser sessions remain separate
 from personal profile values and follow the portal access policy.
+
+Knowledge, mail, website, form, and portal integrations are optional capability
+providers rather than hard-coded Persona subsystems. The PI recipe recommends a
+knowledge binding and can select mail, website, form, or portal bindings only
+when the user configures them.
 
 ## Runtime data
 
