@@ -48,7 +48,7 @@
       "runtime/opl_persona/paths.py",
       "skills/opl-persona/SKILL.md"
     ],
-    "digest": "sha256:c2b1dac9efa34f321264d2837aec75b510e76c3c0b62414afde7b0858d8b50b0"
+    "digest": "sha256:8adeef01ecc9c90aa58c122a1de0eef0deb529017b8676bcbc633ab4224934bb"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

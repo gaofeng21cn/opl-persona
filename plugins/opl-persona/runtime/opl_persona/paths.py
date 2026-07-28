@@ -15,8 +15,6 @@ class PersonaPaths:
         env = os.environ if environ is None else environ
         data = env.get("OPL_PERSONA_HOME", "").strip()
         if not data:
-            data = env.get("OPL_RELAY_HOME", "").strip()
-        if not data:
             data = str(Path.home() / ".opl-persona")
         workspace = env.get("OPL_PERSONA_WORKSPACE", "").strip()
         if not workspace:

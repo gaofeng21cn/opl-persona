@@ -15,6 +15,17 @@ def test_paths_prefer_persona_environment(tmp_path: Path) -> None:
     assert paths.workspace == tmp_path / "workspace"
 
 
+def test_paths_do_not_fall_back_to_relay_home(tmp_path: Path) -> None:
+    paths = PersonaPaths.resolve(
+        environ={
+            "OPL_RELAY_HOME": str(tmp_path / "relay"),
+            "HOME": str(tmp_path / "home"),
+        }
+    )
+    assert paths.data_root == Path.home() / ".opl-persona"
+    assert paths.data_root != tmp_path / "relay"
+
+
 def test_obsidian_note_is_read_only_and_scoped(tmp_path: Path) -> None:
     from opl_persona.obsidian import memo_proposals_from_file
 
