@@ -8,6 +8,8 @@ from .core import (
     build_mail_triage_proposals,
     build_obsidian_note_proposals,
 )
+from .inbox import InboxStore
+from .paths import PersonaPaths
 
 
 ABI_SCHEMA = "opl-package-app-contribution-cli.v1"
@@ -25,6 +27,11 @@ DATA_CONTRACTS: dict[str, dict[str, Any]] = {
         "operation": "read",
         "input": {},
         "result": "personal.context.v1#proposals.result",
+    },
+    "personal.inbox.v1#recent": {
+        "operation": "read",
+        "input": {},
+        "result": "personal.inbox.v1#recent.result",
     },
 }
 
@@ -176,6 +183,24 @@ def _unavailable_data(contract: dict[str, Any]) -> dict[str, object]:
     }
 
 
+def _inbox_read(contract: dict[str, Any]) -> dict[str, object]:
+    items = [
+        item.to_dict()
+        for item in InboxStore.from_paths(PersonaPaths.resolve()).list()
+    ]
+    return {
+        "kind": "data",
+        "state": "ready",
+        "result_schema": contract["result"],
+        "input_schema": contract["input"],
+        "data": {
+            "items": items,
+            "count": len(items),
+            "source_policy": "persona_private_refs_only",
+        },
+    }
+
+
 def _unavailable_action(contract: dict[str, Any]) -> dict[str, object]:
     return {
         "kind": "action",
@@ -248,7 +273,11 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
             raise ValueError(f"{ref} does not support {operation}")
         _validate_input(_request_input(request.get("input")), contract)
         if operation == "read":
-            result = _unavailable_data(contract)
+            result = (
+                _inbox_read(contract)
+                if ref == "personal.inbox.v1#recent"
+                else _unavailable_data(contract)
+            )
         else:
             builder = PROPOSAL_BUILDERS.get(ref)
             result = (
