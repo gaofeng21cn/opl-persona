@@ -1,6 +1,6 @@
 {
   "name": "opl-persona",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Evidence-backed PI context and reviewable output proposals for OPL.",
   "author": {
     "name": "OPL"

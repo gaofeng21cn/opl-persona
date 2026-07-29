@@ -118,19 +118,19 @@ codex plugin add opl-persona@opl-persona --json
 | 路径 | 当前状态 | 含义 |
 | --- | --- | --- |
 | Codex 插件 | 已可通过本地检出目录或 Git 插件市场快照安装 | 让 Codex 安装 Persona 的专业能力入口。 |
-| OPL 托管能力包 | 已准备接入统一 GHCR 通道，尚待发布 | Framework 完成发布和摘要回读后，由 OPL App 通过通用能力包生命周期完成发现、安装、更新、修复和卸载。 |
+| OPL 托管能力包 | 由 Framework 索引与 GHCR 摘要共同判定 | 当索引选中的不可变版本可从 GHCR 公开回读时，OPL App 通过通用能力包生命周期完成发现、安装、更新、修复和卸载。 |
 
 GitHub 仓库是代码来源和 Codex 插件市场的输入。OPL App 通道将由 OPL Framework 的仓库
 索引、不可变 GHCR 能力包载荷、清单与摘要回读共同管理，Persona 不实现自己的更新器。
-预定的稳定通道地址为：
+稳定通道地址为：
 
 ```text
 ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
 ```
 
 GitHub Release 不属于 Persona 的分发权威。Codex Git 路径和 OPL 能力包路径共享源码出处，
-但安装、更新和状态分别由各自平台负责。在 Framework 完成发布并回读远端摘要之前，上述
-GHCR 地址不能视为已上线。
+但安装、更新和状态分别由各自平台负责。托管通道是否可用不能从 README 或源码 tag 推断，
+必须以 Framework 当前索引选择和 GHCR 公开摘要回读为准。
 
 详情见[分发说明](./docs/distribution.md)。
 

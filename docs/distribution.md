@@ -51,10 +51,10 @@ codex plugin add opl-persona@opl-persona --json
 `make install-local` 生成用户本地的 `opl-persona` 启动器。它指向当前检出仓库的运行时，用于
 开发与调试；它不是发布器，也不是长期的能力包管理方式。
 
-## OPL 托管通道（待发布）
+## OPL 托管通道
 
 OPL App 将通过 OPL Framework 的通用能力包生命周期发现、安装、更新、修复与卸载
-Persona。当前本仓只完成能力包载体准备，目标发布链路为：
+Persona。本仓声明能力包载体，Framework 负责以下发布与运行链路：
 
 ```text
 Persona 发布候选
@@ -64,7 +64,7 @@ Persona 发布候选
   -> OPL App 通用能力包管理界面
 ```
 
-预定的稳定通道地址为：
+稳定通道地址为：
 
 ```text
 ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
@@ -77,11 +77,12 @@ ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
 - Framework 负责物化、安装、更新、修复与卸载；
 - OPL App 只呈现通用状态并调用 Framework 投影的动作，不解析 Persona 的私有安装细节。
 
-因此 Persona 不应自行增加更新器、第二份锁文件、伪远端清单或 App 特判。该通道将由
-GHCR OCI 载荷承载；GitHub Release 不参与安装或更新。在 Framework 完成索引登记、镜像
-发布和远端摘要回读之前，不能宣称 OPL 托管能力包已经上线。
+因此 Persona 不应自行增加更新器、第二份锁文件、伪远端清单或 App 特判。该通道由
+GHCR OCI 载荷承载；GitHub Release 不参与安装或更新。是否可安装、可更新或已是当前版本，
+必须由 Framework 当前索引选择与 GHCR 公开摘要回读共同证明，不能从本仓文档或源码 tag
+推断。
 
-## 发布前检查清单
+## 源仓检查清单
 
 本仓负责以下准备：
 
@@ -90,6 +91,6 @@ GHCR OCI 载荷承载；GitHub Release 不参与安装或更新。在 Framework 
 - 单元测试、插件校验与 GitHub 持续集成；
 - 明确的分身工作空间数据边界。
 
-后续上线验证必须证明：Framework 索引与 GHCR digest 一致、安装状态可回读、OPL App
+托管通道验证必须证明：Framework 索引与 GHCR digest 一致、安装状态可回读、OPL App
 通过通用 Capability Package 投影呈现 Persona，以及所有生命周期动作保持 Profile
 Workspace 不变。

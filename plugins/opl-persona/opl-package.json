@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "source": "first_party",
   "package_role": "capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -51,7 +51,7 @@
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:5f393dbf6aa00308d7d6f4111e3da91b2800d2b6ef82fcdd7906213200c7af38"
+    "digest": "sha256:6a2d061323707da5f0083c6aad629f751b5af0ea9bf0af9a61b9d26b52dd3128"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

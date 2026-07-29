@@ -132,12 +132,12 @@ There are two distinct distribution paths:
 | Path | Status today | What it means |
 | --- | --- | --- |
 | Codex Plugin | Available from a local checkout or a Git marketplace snapshot | Lets Codex install the Persona Skill carrier. |
-| OPL managed Package | Prepared for the shared GHCR channel; publication is pending | Will let OPL App discover, install, update, repair, and remove Persona through the generic Package lifecycle after Framework publication and digest readback. |
+| OPL managed Package | Determined by the Framework index and GHCR digest | Lets OPL App discover, install, update, repair, and remove Persona through the generic Package lifecycle when the selected immutable version is publicly readable from GHCR. |
 
 The Git repository is the source and Codex marketplace input. The OPL App
 channel will be owned by OPL Framework through its repository index, immutable
 GHCR Package payload, manifest, and digest readback rather than by a
-Persona-specific updater. Its intended stable reference is:
+Persona-specific updater. Its stable reference is:
 
 ```text
 ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
@@ -145,8 +145,9 @@ ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
 
 GitHub Releases are not part of Persona distribution. The Codex Git path and
 the OPL Package path share source provenance but have separate lifecycle
-authorities. The GHCR reference above must not be treated as live until the
-Framework publication and remote digest readback succeed.
+authorities. Availability must not be inferred from this README or a source
+tag; it is determined by the current Framework index selection and public GHCR
+digest readback.
 
 See [Distribution](./docs/distribution.md) for the exact authority and
 verification boundaries.
