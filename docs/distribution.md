@@ -2,8 +2,7 @@
 
 状态：`active_delivery_boundary`
 
-本文只说明 Persona 代码、Codex 插件（Codex Plugin）与未来 OPL 托管能力包
-（OPL managed Package）的分发边界，不声明任何尚未完成的 OPL App 安装或更新能力。
+本文说明 Persona 代码、Codex 插件（Codex Plugin）与 OPL 托管能力包的分发边界。
 
 ## 三类物理位置
 
@@ -52,10 +51,10 @@ codex plugin add opl-persona@opl-persona --json
 `make install-local` 生成用户本地的 `opl-persona` 启动器。它指向当前检出仓库的运行时，用于
 开发与调试；它不是发布器，也不是长期的能力包管理方式。
 
-## 尚未发布的 OPL 托管通道
+## OPL 托管通道（待发布）
 
-OPL App 要能自动发现、安装、更新、修复与卸载 Persona，必须由 OPL Framework 的通用能力包
-生命周期实现。目标发布链路为：
+OPL App 将通过 OPL Framework 的通用能力包生命周期发现、安装、更新、修复与卸载
+Persona。当前本仓只完成能力包载体准备，目标发布链路为：
 
 ```text
 Persona 发布候选
@@ -65,6 +64,12 @@ Persona 发布候选
   -> OPL App 通用能力包管理界面
 ```
 
+预定的稳定通道地址为：
+
+```text
+ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
+```
+
 该通道的关键事实由 OPL Framework 持有：
 
 - `package_repository_index.v1` 负责候选版本与兼容性选择；
@@ -72,9 +77,9 @@ Persona 发布候选
 - Framework 负责物化、安装、更新、修复与卸载；
 - OPL App 只呈现通用状态并调用 Framework 投影的动作，不解析 Persona 的私有安装细节。
 
-因此 Persona 不应自行增加更新器、第二份锁文件、伪远端清单或 App 特判。GitHub Release、
-容器镜像或其他存储介质可以成为该通道未来的载荷承载方式，但在 Framework 的登记、摘要校验和
-已安装状态回读完成前，它们都不能被称为 OPL 托管发布。
+因此 Persona 不应自行增加更新器、第二份锁文件、伪远端清单或 App 特判。该通道将由
+GHCR OCI 载荷承载；GitHub Release 不参与安装或更新。在 Framework 完成索引登记、镜像
+发布和远端摘要回读之前，不能宣称 OPL 托管能力包已经上线。
 
 ## 发布前检查清单
 
@@ -85,13 +90,6 @@ Persona 发布候选
 - 单元测试、插件校验与 GitHub 持续集成；
 - 明确的分身工作空间数据边界。
 
-跨仓发布前仍需由相应负责人完成：
-
-- 在 Framework 仓库索引中登记 Persona；
-- 生成并发布不可变载荷、清单和摘要；
-- 证明 Framework 的安装、更新、修复和卸载动作可用；
-- 证明 OPL App 的通用管理视图通过动态能力包投影显示 Persona；
-- 对已安装字节、版本、动作与外部资源健康状态完成独立回读。
-
-完成这些条件之前，Persona 的正确表述是：可作为 Codex 插件使用，正在为 OPL 托管能力包分发
-做准备。
+后续上线验证必须证明：Framework 索引与 GHCR digest 一致、安装状态可回读、OPL App
+通过通用 Capability Package 投影呈现 Persona，以及所有生命周期动作保持 Profile
+Workspace 不变。

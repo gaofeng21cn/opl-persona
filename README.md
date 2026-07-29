@@ -125,23 +125,31 @@ codex plugin marketplace upgrade opl-persona --json
 codex plugin add opl-persona@opl-persona --json
 ```
 
-## Distribution Status
+## Distribution
 
 There are two distinct distribution paths:
 
 | Path | Status today | What it means |
 | --- | --- | --- |
 | Codex Plugin | Available from a local checkout or a Git marketplace snapshot | Lets Codex install the Persona Skill carrier. |
-| OPL managed Package | Planned | Will let OPL App discover, install, update, repair, and remove Persona through the shared Package lifecycle. |
+| OPL managed Package | Prepared for the shared GHCR channel; publication is pending | Will let OPL App discover, install, update, repair, and remove Persona through the generic Package lifecycle after Framework publication and digest readback. |
 
-The Git repository is a source and a Codex marketplace input. It is **not yet**
-an OPL managed Package channel, and OPL App cannot honestly claim automatic
-remote installation or update for Persona today. The target channel will be
-owned by OPL Framework through its repository index, immutable Package payload,
-manifest, and digest readback rather than by a Persona-specific updater.
+The Git repository is the source and Codex marketplace input. The OPL App
+channel will be owned by OPL Framework through its repository index, immutable
+GHCR Package payload, manifest, and digest readback rather than by a
+Persona-specific updater. Its intended stable reference is:
 
-See [Distribution](./docs/distribution.md) for the current boundary and the
-release work still required.
+```text
+ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
+```
+
+GitHub Releases are not part of Persona distribution. The Codex Git path and
+the OPL Package path share source provenance but have separate lifecycle
+authorities. The GHCR reference above must not be treated as live until the
+Framework publication and remote digest readback succeed.
+
+See [Distribution](./docs/distribution.md) for the exact authority and
+verification boundaries.
 
 ## Development Checks
 

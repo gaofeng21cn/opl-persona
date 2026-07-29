@@ -50,7 +50,7 @@ def test_package_identity_capabilities_and_plugin_version_are_aligned() -> None:
 
     assert package["surface_kind"] == "opl_capability_package_manifest.v2"
     assert package["package_id"] == "opl-persona"
-    assert package["package_role"] == "framework_capability_package"
+    assert package["package_role"] == "capability_package"
     assert package["version"] == plugin["version"] == project["project"]["version"]
     assert set(package["exports"]["core_module_ids"]) == CAPABILITY_IDS
     assert package["exports"]["core_skill_ids"] == ["opl-persona"]
@@ -70,15 +70,18 @@ def test_package_content_lock_matches_carrier_bytes() -> None:
     digest = hashlib.sha256()
 
     assert content_lock["algorithm"] == "sha256"
-    assert content_lock["canonicalization"] == "ordered_path_nul_file_bytes"
+    assert content_lock["canonicalization"] == "ordered_path_length_file_length_bytes"
     assert "opl-package.json" not in content_lock["paths"]
     for relative_path in content_lock["paths"]:
         locked_path = PLUGIN_ROOT / relative_path
         assert locked_path.is_file()
         assert locked_path.resolve().is_relative_to(PLUGIN_ROOT.resolve())
-        digest.update(relative_path.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(locked_path.read_bytes())
+        path_bytes = relative_path.encode("utf-8")
+        file_bytes = locked_path.read_bytes()
+        digest.update(len(path_bytes).to_bytes(8, "big"))
+        digest.update(path_bytes)
+        digest.update(len(file_bytes).to_bytes(8, "big"))
+        digest.update(file_bytes)
 
     assert content_lock["digest"] == f"sha256:{digest.hexdigest()}"
 

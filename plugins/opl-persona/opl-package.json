@@ -3,9 +3,9 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "source": "first_party",
-  "package_role": "framework_capability_package",
+  "package_role": "capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
   "machine_boundary": "This Package declares Persona capabilities and role-neutral App contributions. It does not own private mail, knowledge, website, credential, approval, installed, or runtime truth.",
   "capability_abi": {
@@ -31,7 +31,7 @@
   },
   "content_lock": {
     "algorithm": "sha256",
-    "canonicalization": "ordered_path_nul_file_bytes",
+    "canonicalization": "ordered_path_length_file_length_bytes",
     "paths": [
       ".codex-plugin/plugin.json",
       "assets/icon.png",
@@ -51,12 +51,11 @@
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:97e00b86d8fb9430b0c56a6c7b814b8bde24c1e000e1ee53f23b7ac271db98d2"
+    "digest": "sha256:5f393dbf6aa00308d7d6f4111e3da91b2800d2b6ef82fcdd7906213200c7af38"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
     "plugin_source_path": ".",
-    "carrier_source_commit": "79fea261bb3660154346d76819061ca0ad80d300",
     "codex_default_exposure": false,
     "optional_install_policy": "all_exported_skills",
     "app_contribution_abi": {
