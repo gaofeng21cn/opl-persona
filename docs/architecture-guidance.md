@@ -22,9 +22,10 @@ goal. Domain capabilities remain independently installable and usable.
 The public product model is intentionally small:
 
 ```text
-OPL base       runtime, package discovery, contracts, lifecycle, execution
+Package owners identity, capability/dependency intent, App contributions, publication
+Native carriers physical install, update, repair, removal, and installed readback
+OPL base       runtime, installed discovery, carrier delegation, aggregation, execution
 OPL App        user-facing host, chat, navigation, views, approvals
-OPL Packages   installable domain capabilities such as Relay and Persona
 ```
 
 Packages are distribution carriers, not a synonym for one domain ability. The
@@ -49,7 +50,7 @@ flowchart TB
     P --> O["Obsidian\nprivate knowledge authority"]
     P --> W["gflab_web\npublic content + deployment authority"]
     R --> M["Mail provider / Apple Mail\nmail and send authority"]
-    BASE["OPL base\ncontracts + package lifecycle"] --> APP
+    BASE["OPL base\ncontracts + carrier delegation"] --> APP
     BASE --> P
     BASE --> R
 ```
@@ -61,7 +62,7 @@ system keeps its own source of truth.
 
 | Repository or system | Owns | Does not own |
 | --- | --- | --- |
-| `one-person-lab` | Generic Package contracts, discovery, projections, lifecycle | Mail, Persona, website, or UI business state |
+| `one-person-lab` | Generic Package contracts, installed discovery, carrier delegation, and aggregation | Package publication, carrier physical state, mail, Persona, website, or UI business state |
 | `one-person-lab-app` | App product contract, page state, contribution consumption, acceptance | Domain data, mail semantics, website deployment |
 | `opl-aion-shell` | Desktop renderer/process/package implementation | Product contracts or domain authority |
 | `opl-relay` | Mail identities, evidence, relationship memory, draft lifecycle, send receipts | Persona orchestration, website CMS, Obsidian vault |
@@ -245,9 +246,11 @@ Each domain repository may provide three related surfaces:
 2. **Codex Plugin** — Skills, discovery metadata, and thin integration helpers.
 3. **OPL Package** — capability metadata and declarative App contributions.
 
-The Plugin and Package are carriers. They must not own private state, secrets,
-or an alternate database. The OPL platform owns installation and lifecycle;
-the domain Core owns domain semantics; OPL App owns rendering.
+The Plugin is a native carrier and the Package descriptor is its owner
+declaration. Neither may own private state, secrets, or an alternate database.
+The Package owner owns identity and publication, the configured native carrier
+owns physical lifecycle/readback, OPL Framework delegates and aggregates, the
+domain Core owns domain semantics, and OPL App owns rendering.
 
 Capability declarations describe stable semantics such as mail, knowledge, or
 site publication. Provider adapters implement those semantics; private Resource

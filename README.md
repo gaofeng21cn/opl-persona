@@ -131,13 +131,16 @@ There are two distinct distribution paths:
 
 | Path | Status today | What it means |
 | --- | --- | --- |
-| Codex Plugin | Available from a local checkout or a Git marketplace snapshot | Lets Codex install the Persona Skill carrier. |
-| OPL managed Package | Determined by the Framework index and GHCR digest | Lets OPL App discover, install, update, repair, and remove Persona through the generic Package lifecycle when the selected immutable version is publicly readable from GHCR. |
+| Codex Plugin | Native Codex carrier; current state comes from `codex plugin list --json` | Installs and exposes the Persona Skill carrier without making the checkout or Plugin cache a data authority. |
+| OPL Package publication | Persona owner descriptor plus immutable GHCR payloads | Publishes Package identity and bytes independently; `latest-stable` is a moving owner channel, not installed-state proof. |
 
-The Git repository is the source and Codex marketplace input. The OPL App
-channel will be owned by OPL Framework through its repository index, immutable
-GHCR Package payload, manifest, and digest readback rather than by a
-Persona-specific updater. Its stable reference is:
+The Persona repository owns its descriptor, capability declarations, source
+provenance, and Package publication. OPL Base may download, verify, and hand off
+selected OCI bytes; the configured native carrier owns physical install,
+update, repair, removal, and its own readback. OPL Framework discovers installed
+descriptors, delegates carrier actions, and aggregates presence and callability
+for OPL App. Persona does not implement a second updater. Its stable owner
+channel is:
 
 ```text
 ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
@@ -145,9 +148,10 @@ ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
 
 GitHub Releases are not part of Persona distribution. The Codex Git path and
 the OPL Package path share source provenance but have separate lifecycle
-authorities. Availability must not be inferred from this README or a source
-tag; it is determined by the current Framework index selection and public GHCR
-digest readback.
+authorities. Publication must be read from the public immutable GHCR digest;
+installed/current state must be read separately from the configured native
+carrier. Neither may be inferred from this README, a source tag, or Framework
+projection alone.
 
 See [Distribution](./docs/distribution.md) for the exact authority and
 verification boundaries.

@@ -1,6 +1,6 @@
 # OPL App 能力管理与统一审核规划
 
-状态：`discovery_projection_completed`；语义化 UI 与统一审核仍为 `deferred_execution`
+状态：`source_contract_present_live_currentness_requires_readback`；语义化 UI 与统一审核仍为 `deferred_execution`
 
 本文件记录已经确定的产品边界和实施顺序，供后续 Framework、OPL App、Shell
 和 Package owner 协调时使用。它不授权实现 UI、安装/更新/卸载、邮件发送、
@@ -29,27 +29,27 @@ Relay 和 Persona 是第一批真实 Package，但它们不是 App 中的特殊�
 
 ## 当前事实与剩余缺口
 
-截至 2026-07-28，`codex plugin list --json` 已确认以下两个 carrier 都已本地安装且
-启用：
+Relay 与 Persona owner 仓已经各自提供 descriptor、Capability 与 role-neutral
+`app_contributions`；Framework source 也持有 installed descriptor discovery、
+status/action projection 与 contribution read/execute 的通用路径，并拒绝已退役的
+repository-index 输入。这些是 source/contract 事实，不是任一主机的 current installed
+或 App runtime 事实。
 
-| Package | Codex Plugin | 原生状态 |
-| --- | --- | --- |
-| `opl-relay` | `opl-relay@opl-relay` | installed, enabled |
-| `opl-persona` | `opl-persona@opl-persona-local` | installed, enabled |
-
-原先记录的 W3 缺口已经关闭：Framework 的动态 Package directory、status/action
-projection 与 role-neutral contribution read/execute 路径现已能发现并调用 Relay 和
-Persona。该结果证明的是“Package 已被宿主发现且其声明的贡献可路由”，不是以下任何一种
-更强结论：
+每次验收必须先用 `codex plugin list --json` 回读当前 Codex Plugin carrier，再读取
+当前 Framework/App runtime 实际暴露的 directory、status、action 与 contribution
+projection。文档不保存某一天的 installed/enabled 表，也不从 descriptor、测试或历史
+截图推断 live currentness。一次成功 readback 最多证明“该主机当前发现了 Package 且
+声明的 contribution 可路由”，不证明以下更强结论：
 
 - 对应邮箱、Obsidian vault 或网站 Resource Binding 已配置并健康；
 - App/Shell 已按 `list_detail`、`approval_diff` 等 view kind 完成语义化渲染；
 - carrier 已可靠投影安装、更新、修复、卸载等全部 mutation；
 - 任一 Persona proposal、邮件草稿、vault 写入或网站变更已得到批准并进入最终 authority。
 
-因此第一个真实断点已从 W3 discovery 转移到 Resource Binding 健康回读、标准 view
-renderer、统一审核和 owner adapter 的批准后闭环。后续不能继续以“尚未动态发现
-Relay/Persona”为理由增加静态卡片或 Package id 特判。
+因此不能把 W3 永久写成 completed 或 permanently missing。fresh readback 成功时，
+下一断点才转移到 Resource Binding 健康、标准 view renderer、统一审核和 owner adapter
+批准后闭环；fresh readback 失败时，修复通用 discovery/currentness 路径，仍不得增加
+静态卡片或 Package id 特判。
 
 ## 能力管理面
 
@@ -127,16 +127,20 @@ Persona 的“批准提案”只允许进入该 proposal 的下一条 owner rout
 
 ## 实施状态与顺序
 
-本规划不改变正在执行的 legacy Package Manager 退役任务。已完成的 W3 producer 路径
-和仍待实施的 W4/UI 路径必须分开记录：
+本规划不恢复已退役的 legacy Package Manager。source contract、host currentness 和
+仍待实施的 W4/UI 路径必须分开记录：
 
 ```text
-W3 Framework                                      COMPLETED
-  fresh carrier discovery + status/actions projection
+W3 Framework source contract                      PRESENT
+  dynamic installed discovery + carrier delegation + aggregation
        |
        v
 Package owners
-  canonical Relay/Persona descriptors and contributions  COMPLETED
+  canonical Relay/Persona descriptors and contributions  PRESENT
+       |
+       v
+Host carrier / projection readback                FRESH PER HOST
+  codex plugin state + current Framework/App projection
        |
        v
 Resource Binding + owner adapters                 ACTIVE SEPARATE LANES
@@ -164,12 +168,12 @@ Unified review slice                              DEFERRED
 回归修复，仍不得用静态 Relay/Persona 卡片或手工维护的 catalog 绕过。正常情况下，
 实施重点已经是消费现有 projection，而不是再造 discovery。
 
-## 已完成门禁与未来验收条件
+## Fresh 验收条件
 
-下列第 1 项已完成；其余结果仍是独立门禁，不能用文档、fixture、单元测试或 Package
-installed 状态替代：
+下列结果是独立门禁，必须在目标主机和当前 runtime 上 fresh 回读，不能用文档、fixture、
+单元测试、descriptor 或历史 Package installed 状态替代：
 
-1. **已完成**：fresh App state 能为已安装的 Relay 与 Persona 返回动态
+1. fresh App state 能为当前已安装的 Relay 与 Persona 返回动态
    directory/status/action projection，contribution read/execute 可到达 owner route。
 2. 一个未知的合规测试 Package 无需改动 App/Shell 源码即可进入同一管理页面；invalid
    Package 仅自身不可用。
@@ -183,9 +187,10 @@ installed 状态替代：
 
 ## 当前行动
 
-W3 discovery、status/action projection 与 Relay/Persona contribution 路由已经完成，
-不再是当前前置。现在允许按独立 write set 推进 Resource Binding、Persona Inbox、
-Obsidian approved-apply、网站 owner route 和 Relay 草稿 handoff。
+W3 source contract 与 Relay/Persona owner descriptor 已存在；目标主机仍须先完成
+native carrier 和 current Framework/App projection readback。该 readback 成功后，
+可以按独立 write set 推进 Resource Binding、Persona Inbox、Obsidian approved-apply、
+网站 owner route 和 Relay 草稿 handoff；失败时只修通用 discovery/currentness 路径。
 
 OPL App/Shell 的标准 view mount、统一审核队列、通用 Package mutation 控件仍保持
 `deferred_execution`。这些 UI 只有在相应 read model、opaque action、确认要求与最终

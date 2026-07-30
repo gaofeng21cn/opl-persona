@@ -38,9 +38,10 @@ Capability；同一个 Capability 也可以存在多个 Provider。Binding 是�
 可组合能力是 OPL Packages 的内部合同，不是新的第四个公共产品层：
 
 ```text
-OPL Base       Package 发现、安装、更新、权限与执行生命周期
+Package owner  identity、Capability、dependency intent、App contribution 与 publication
+Native carrier install、update、repair、remove 与物理 installed readback
+OPL Framework  installed descriptor discovery、carrier action 委托与状态聚合
 OPL App        对话、可视化、审批、组合与状态呈现
-OPL Packages   Core、Skill、Capability 与 Provider Adapter 的载体
 ```
 
 Persona 是跨域判断、provenance 和 proposal 编排者；它不成为邮箱、知识库、网站、表格

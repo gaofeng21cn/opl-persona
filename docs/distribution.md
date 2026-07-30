@@ -53,15 +53,17 @@ codex plugin add opl-persona@opl-persona --json
 
 ## OPL 托管通道
 
-OPL App 将通过 OPL Framework 的通用能力包生命周期发现、安装、更新、修复与卸载
-Persona。本仓声明能力包载体，Framework 负责以下发布与运行链路：
+Persona owner 通过 `plugins/opl-persona/opl-package.json` 声明 Package identity、
+capability、dependency intent、App contribution 与 content lock，并独立发布不可变
+GHCR payload。安装与 publication 是两个 authority 面：
 
 ```text
-Persona 发布候选
-  -> OPL Framework 仓库索引
-  -> 不可变能力包载荷 + 清单地址 + 摘要
-  -> Framework 物化与生命周期动作投影
-  -> OPL App 通用能力包管理界面
+Persona owner descriptor + immutable GHCR publication
+  -> OPL Base download / verify / bytes handoff
+  -> configured native carrier install / update / repair / remove
+  -> native installed readback
+  -> Framework discovery / delegation / aggregation
+  -> OPL App generic Package projection
 ```
 
 稳定通道地址为：
@@ -70,17 +72,18 @@ Persona 发布候选
 ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
 ```
 
-该通道的关键事实由 OPL Framework 持有：
+该通道的 owner 边界固定为：
 
-- `package_repository_index.v1` 负责候选版本与兼容性选择；
-- 能力包载荷清单、不可变摘要和发布状态绑定可安装字节；
-- Framework 负责物化、安装、更新、修复与卸载；
-- OPL App 只呈现通用状态并调用 Framework 投影的动作，不解析 Persona 的私有安装细节。
+- Persona owner 持有 descriptor、source provenance、immutable payload 与 publication；
+- OPL Base 只下载、校验并 handoff OCI bytes，不保存第二份 resolver、installed lock 或 LKG；
+- 配置的 Codex Plugin Manager 等原生 carrier 持有物理 lifecycle 与 installed readback；
+- Framework 只发现 installed descriptor、委托 carrier action，并聚合
+  presence/callability；OPL App 呈现该通用 projection，不解析 Persona 私有安装细节。
 
 因此 Persona 不应自行增加更新器、第二份锁文件、伪远端清单或 App 特判。该通道由
 GHCR OCI 载荷承载；GitHub Release 不参与安装或更新。是否可安装、可更新或已是当前版本，
-必须由 Framework 当前索引选择与 GHCR 公开摘要回读共同证明，不能从本仓文档或源码 tag
-推断。
+必须分别由公开不可变 GHCR digest 与配置的原生 carrier fresh readback 证明；Framework
+projection 只能聚合这些结果，不能从本仓文档、源码 tag 或 descriptor 存在推断。
 
 ## 源仓检查清单
 
@@ -91,6 +94,8 @@ GHCR OCI 载荷承载；GitHub Release 不参与安装或更新。是否可安�
 - 单元测试、插件校验与 GitHub 持续集成；
 - 明确的分身工作空间数据边界。
 
-托管通道验证必须证明：Framework 索引与 GHCR digest 一致、安装状态可回读、OPL App
-通过通用 Capability Package 投影呈现 Persona，以及所有生命周期动作保持 Profile
-Workspace 不变。
+托管通道验证必须分别证明：Package owner 的 immutable version 与 `latest-stable`
+解析到预期公开 digest；配置的原生 carrier 能回读 exact installed bytes；Framework
+projection 与 carrier readback 一致；OPL App 只通过通用 Capability Package projection
+呈现 Persona；所有 lifecycle action 都保持 Profile Workspace 不变。任一单项通过都不
+等于 runtime、Resource Binding、外部资源或产品 ready。

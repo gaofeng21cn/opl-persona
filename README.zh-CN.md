@@ -117,20 +117,23 @@ codex plugin add opl-persona@opl-persona --json
 
 | 路径 | 当前状态 | 含义 |
 | --- | --- | --- |
-| Codex 插件 | 已可通过本地检出目录或 Git 插件市场快照安装 | 让 Codex 安装 Persona 的专业能力入口。 |
-| OPL 托管能力包 | 由 Framework 索引与 GHCR 摘要共同判定 | 当索引选中的不可变版本可从 GHCR 公开回读时，OPL App 通过通用能力包生命周期完成发现、安装、更新、修复和卸载。 |
+| Codex 插件 | Codex 原生 carrier；当前状态以 `codex plugin list --json` 为准 | 安装并暴露 Persona Skill 载体，但 checkout 或插件缓存不成为数据 authority。 |
+| OPL Package publication | Persona owner descriptor 与不可变 GHCR payload | 独立发布 Package identity 与 bytes；`latest-stable` 是 owner moving channel，不是 installed-state proof。 |
 
-GitHub 仓库是代码来源和 Codex 插件市场的输入。OPL App 通道将由 OPL Framework 的仓库
-索引、不可变 GHCR 能力包载荷、清单与摘要回读共同管理，Persona 不实现自己的更新器。
-稳定通道地址为：
+Persona 仓持有 descriptor、capability 声明、source provenance 与 Package publication。
+OPL Base 可以下载、校验并 handoff 所选 OCI bytes；配置的原生 carrier 持有物理安装、
+更新、修复、卸载及其 readback。OPL Framework 只发现 installed descriptor、委托
+carrier action，并为 OPL App 聚合 presence 与 callability；Persona 不实现第二套更新器。
+稳定 owner channel 为：
 
 ```text
 ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable
 ```
 
 GitHub Release 不属于 Persona 的分发权威。Codex Git 路径和 OPL 能力包路径共享源码出处，
-但安装、更新和状态分别由各自平台负责。托管通道是否可用不能从 README 或源码 tag 推断，
-必须以 Framework 当前索引选择和 GHCR 公开摘要回读为准。
+但安装、更新和状态分别由各自 carrier 负责。publication 必须从公开不可变 GHCR digest
+回读，installed/current 状态必须从配置的原生 carrier 单独回读；二者都不能从 README、
+source tag 或 Framework projection 单独推断。
 
 详情见[分发说明](./docs/distribution.md)。
 
