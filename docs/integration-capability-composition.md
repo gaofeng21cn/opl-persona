@@ -66,12 +66,12 @@ Capability ID 是稳定语义，不绑定文件路径、网站框架、邮箱客
 `gflab_web` 将来更换生成器或托管平台，只要 adapter 继续满足
 `publishing.site.v1`，Persona Recipe 无需变化。
 
-### 现有 ID 的兼容与迁移
+### 当前 Provider ID 与通用 Capability 的迁移边界
 
-通用 Capability ID 是长期合同；现有 provider-specific ID 和 action ref 是兼容入口，
-不能被 App 或 Persona 静默改写：
+通用 Capability ID 是长期语义合同；当前 Provider ID 和 action ref 仍是 active exports
+及 callable refs，不能被 App 或 Persona 静默改写、删除或写成已退役：
 
-| 长期 Capability ID | 当前兼容 ID / ref | 迁移含义 |
+| 长期 Capability ID | 当前 Provider ID / action ref | 迁移含义 |
 | --- | --- | --- |
 | `knowledge.documents.v1` | `knowledge.obsidian.v1`、`knowledge.obsidian.v1#note.propose` | Obsidian 是首个 Provider；Recipe 与 Binding 使用通用 ID，resolver 返回 Provider 实际 action ref |
 | `publishing.site.v1` | `website.publication.v1` 与现有 `gflab_web` proposal type | `gflab_web` 是首个 Provider；网站 proposal schema 不因 Capability 泛化而强制改名 |
@@ -85,12 +85,12 @@ Capability ID、provider action ref 和 proposal artifact schema 是三类 ident
 - proposal schema 可以保留更具体的目标语义，例如 `knowledge.obsidian.note.v1`，不能被
   当作另一个 Capability ID。
 
-迁移按以下顺序进行：
+迁移按以下顺序进行，当前 Provider ID/action ref 在迁移完成前保持可调用：
 
-1. Provider 先同时声明通用 Capability 与 legacy alias，并保持旧 action ref 可调用；
-2. 新 Recipe、Binding 与 App projection 只写通用 ID，但执行时使用 Provider 返回的 ref；
-3. consumer-zero 与 installed/effective readback 均证明旧 ID 无调用者后，才移除 alias；
-4. 已发布 ID 永不改作其他语义。迁移期间不得让 App 维护第二份硬编码 alias 表。
+1. Provider 先声明通用 Capability，同时保留当前 Provider ID/action ref 的出口；
+2. 新 Recipe、Binding 与 App projection 在对应 consumer 已迁移时写通用 ID，执行时使用 Provider 返回的 ref；
+3. 只有 consumer-zero 与 installed/effective readback 均证明当前 Provider ID/action ref 已无调用者后，才可移除或降级该出口；
+4. 已发布 ID 永不改作其他语义。迁移期间不得让 App 维护第二份硬编码 ID 映射表。
 
 第一版统一操作词汇只有：
 
@@ -263,7 +263,7 @@ descriptor、测试 fixture 或本地候选不能证明真实资源已可用。
 ## 分阶段落地
 
 1. **合同固化**：以本文档为设计 SSOT，后续在 Package descriptor 中逐步增加通用
-   Capability 声明和 legacy alias，不改变现有 proposal 安全边界。
+   Capability 声明并保留当前 Provider ID/action ref 的可发现性，不改变现有 proposal 安全边界。
 2. **三源闭环**：以 Obsidian、Relay、`gflab_web` 验证一次“论文 → 知识库 + 网站 + 邮件”
    的 proposal/readback 链路。
 3. **Binding 管理**：carrier-neutral Package discovery/status/action projection 已可用；
