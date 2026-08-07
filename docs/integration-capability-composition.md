@@ -1,11 +1,24 @@
 # OPL Persona 可组合能力与集成模型
 
-状态：`active_design_authority`，v1
+Owner: `opl-persona`
 
-本文件定义 OPL Persona 如何把知识库、邮件、网站、表格和外部专业门户组合成
+Purpose: `persona_composable_capability_target_design`
+
+State: `active_target_design`
+
+Machine boundary: 本文持有 Persona 可组合能力的目标设计，不是当前实现 inventory。
+当前 Package exports、callable action、Resource Binding 与 App contribution 以
+Package descriptor、runtime source、tests 和
+[Persona Architecture](architecture.md) 为机器真相。当前实现只提供现有
+descriptor-backed modules/actions 与 Obsidian Resource Binding CLI；
+`personal.profile.v1`、`forms.fill.v1`、`external.portal.v1`、Recipe/provider catalog、
+form/portal adapter 和 receipt 在对应 owner source/tests 与 authority readback 出现前
+仍是 target-only。本文明确标为当前的 Provider ID/action ref 继续是 active export，
+不得因本文的 target-design 状态被写成已退役。
+
+本文件定义目标形态下 OPL Persona 如何把知识库、邮件、网站、表格和外部专业门户组合成
 可选择、可替换、可发现的能力。它补充
-[Architecture Guidance](architecture-guidance.md)，但不增加新的面向用户产品层，也不承诺
-所有下述 adapter 已经实现。
+[Architecture Guidance](architecture-guidance.md)，但不增加新的面向用户产品层。
 
 ## 结论
 
