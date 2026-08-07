@@ -1,5 +1,10 @@
 # Persona Mail Policy Boundary
 
+Owner: `opl-persona`
+Purpose: `persona_mail_policy_boundary`
+State: `active_current`
+Machine boundary: 当前行为归 `plugins/opl-persona/runtime/opl_persona/policy.py`、`core.py`、`plugins/opl-persona/opl-package.json` 与 `tests/test_policy.py` / `tests/test_core.py`。本文不能证明私有 Profile Workspace 可用、Plugin/Package installed current、App 已消费贡献或任何 mailbox mutation；邮件事实、草稿、发送和最终回读仍归 Relay 与邮件 owner。
+
 OPL Persona owns the interpretation of mail rules. The user's rules are
 Markdown files in the configured Profile Workspace, normally:
 

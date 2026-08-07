@@ -1,11 +1,23 @@
 # OPL Persona 对外专业工作架构
 
-状态：`active_design_authority`，v1
+Owner: `opl-persona`
+Purpose: `external_professional_work_target_design`
+State: `active_target_design`
+Machine boundary: 本文定义 Persona-owned 对外专业工作目标边界。当前 Package descriptor、runtime 与 tests 尚未导出 external portal capability、action、schema、adapter 或 receipt；下文 scope、target、workflow 和分阶段条目在对应 contracts/source/tests 与第三方 portal readback 出现前都不是当前可调用行为、外部写入授权或完成证明。
 
 本文件是 OPL Persona 中“对外专业工作（External Professional Work）”子域的
-详细设计权威。它扩展
+目标设计权威。它扩展
 [Architecture Guidance](architecture-guidance.md) 的 Persona 边界，但不改变其中
 邮件、Obsidian、`gflab_web` 和 OPL App 各自的数据与写入 authority。
+
+## 当前实现边界
+
+当前 owner descriptor 只导出 Persona context、memory、Inbox、Obsidian、mail 和
+website proposal 能力；runtime 已实现 Profile Workspace、Resource Binding、Inbox、
+mail triage 与 Obsidian proposal 路径。它尚未提供本文提出的
+`external_work_item.v1`、`external_portal_profile.v1`、`external_action_receipt.v1`
+或任何 portal submit action。这里的名字是后续 owner contract 候选，不得被 App、
+Framework、Skill 或自动化当成已安装、已发布或可执行接口。
 
 ## 目标与边界
 

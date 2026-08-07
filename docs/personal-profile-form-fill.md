@@ -1,12 +1,24 @@
 # OPL Persona 个人资料与表格填写架构
 
-状态：`active_design_authority`，v1
+Owner: `opl-persona`
+Purpose: `personal_profile_form_fill_target_design`
+State: `active_target_design`
+Machine boundary: 本文定义 Persona-owned 个人资料引用与表格填写目标边界。当前 Package descriptor、runtime 与 tests 尚未导出 `personal_profile` / `form_fill` Core、`personal-form-fill` Skill、form action、adapter 或 receipt；下文字段合同、CLI、proposal target 与分阶段闭环在对应 owner source/tests 和目标文件或门户 readback 出现前都不是当前可调用行为或完成证明。
 
 本文件是 OPL Persona 中“个人资料与表格填写（Personal Profile and Form Fill）”
-子域的详细设计权威。它扩展
+子域的目标设计权威。它扩展
 [Architecture Guidance](architecture-guidance.md)，并为
 [对外专业工作](external-professional-work.md)提供受控的个人字段输入；不改变
 Obsidian、邮件、第三方门户或 OPL App 的既有 authority。
+
+## 当前实现边界
+
+当前 owner descriptor 只导出一个 `opl-persona` Skill，以及 context、memory、Inbox、
+Obsidian、mail 和 website proposal modules。现有 Resource Binding 只为用户选择的
+Obsidian 资源提供 opaque binding 与 owner-side resolution；它不等于个人字段 registry、
+表格解析器、form adapter 或提交 route。本文提出的 Core、Skill、action 名和 receipt
+shape 都是后续 owner contract 候选，不得被 App、Framework 或自动化当成已安装、已发布
+或可执行接口。
 
 ## 目标与结论
 
@@ -132,9 +144,10 @@ Core 只定义字段、映射、proposal 和验证，不自己解析每一个 Of
 站点反复出现、且其结构稳定时，才添加薄 adapter。对外专业门户使用本模块的
 `personal_field.v1`，但仍受其自身 role、site scope 与 per-task approval 约束。
 
-## OPL App 与 Codex Plugin
+## OPL App 与 Codex Plugin 目标形态
 
-Codex Plugin 提供 `personal-form-fill` Skill，以及必要的 Core CLI action：
+目标形态下，Codex Plugin 将提供 `personal-form-fill` Skill，以及必要的 Core CLI
+action：
 
 ```text
 profile audit       汇总缺失、过期和不完整来源的字段
