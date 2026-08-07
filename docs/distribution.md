@@ -1,6 +1,16 @@
 # OPL Persona 分发说明
 
-状态：`active_delivery_boundary`
+Owner: `opl-persona`
+
+Purpose: `persona_distribution_authority`
+
+State: `active_current`
+
+Machine boundary: 本文定义 Persona source distribution 与 owner boundary，不是
+publication、installed 或 runtime readback。Descriptor/source provenance、公开不可变
+GHCR payload、原生 carrier installed bytes、Framework projection 与 OPL App consumption
+是独立 authority；本文件不能证明 GHCR digest、installed/current state、Resource Binding、
+外部资源可用或 product ready。
 
 本文说明 Persona 代码、Codex 插件（Codex Plugin）与 OPL 托管能力包的分发边界。
 
