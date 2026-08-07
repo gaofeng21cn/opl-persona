@@ -84,8 +84,8 @@ reviewable route suggestion after loading identity and manuscript/roster facts
 from `<profile>/profile/*.md` and `<profile>/context/*.md`, without executing
 it. The result contains both a
 `personal.inbox.v1` capture proposal and a `mail.triage` proposal. It does not
-archive, mark, draft, send, or otherwise change mail. See
-[Persona Mail Policy Boundary](../../../docs/mail-policy.md).
+archive, mark, draft, send, or otherwise change mail. See the canonical
+[Persona Mail Policy Boundary](https://github.com/gaofeng21cn/opl-persona/blob/main/docs/mail-policy.md).
 
 ## Obsidian note proposals
 
