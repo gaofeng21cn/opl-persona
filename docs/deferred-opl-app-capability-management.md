@@ -1,20 +1,31 @@
 # OPL App 能力管理与统一审核规划
 
-状态：`source_contract_present_live_currentness_requires_readback`；语义化 UI 与统一审核仍为 `deferred_execution`
+Owner: `opl-persona`
 
-本文件记录已经确定的产品边界和实施顺序，供后续 Framework、OPL App、Shell
-和 Package owner 协调时使用。它不授权实现 UI、安装/更新/卸载、邮件发送、
-网站发布或任何真实外部写入。
+Purpose: `app_capability_cross_owner_coordination_reference`
+
+State: `active_reference_with_owner_readback_required`
+
+Machine boundary: 本文只保留 Persona owner 参与的 Package/Capability 与统一审核
+跨 owner 约束和依赖顺序。OPL App 的产品命名、信息架构、兼容路由与实现状态归
+`one-person-lab-app` contracts/source/runtime readback；Framework projection 与 host
+currentness 归 Framework contracts/source 和 fresh `opl ... --json` readback；installed
+truth 归配置的原生 carrier。本文不证明 installed、runtime、domain、product 或 release
+ready，也不授权 UI、Package mutation、邮件发送、网站发布或任何真实外部写入。
+
+本文件不是 OPL App 产品 SSOT 或跨仓 backlog。它供 Framework、OPL App、Shell 和
+Package owner 对齐 Persona 参与的边界；每个 owner 的 current state 与下一动作仍从其
+repo-native contract、source 和 authority readback 读取。
 
 ## 决策
 
-OPL App 可以管理 OPL Relay 与 OPL Persona，但管理对象应是角色无关的
-**Package / Capability**，而不是把两者伪装成 `standard_agent`，也不是恢复一套
-自研 Package Manager。
+跨 owner 保留的不变量是：任何 App consumer 管理 Relay、Persona 或未知合规 Package
+时，管理对象应是角色无关的 **Package / Capability**，而不是把它们伪装成
+`standard_agent`，也不是恢复一套自研 Package Manager。
 
-推荐的用户可见名称是“能力与集成”（英文可用 *Capabilities & Integrations*）。
-现有“智能体管理”入口可在实施时逐步迁移或保留为兼容路由；它不能继续成为只有
-`kind=agent` 才能进入的产品边界。
+用户可见名称、页面拆分、导航归属与兼容路由由 OPL App owner 决定；本文不再冻结
+“能力与集成”或“智能体管理”作为当前产品名称。无论 App owner 采用何种名称，入口都
+不得成为只有 `kind=agent` 才能进入的 Package/Capability 边界。
 
 ```text
 Package identity       capability、入口、依赖、App contribution 声明
@@ -53,7 +64,8 @@ projection。文档不保存某一天的 installed/enabled 表，也不从 descr
 
 ## 能力管理面
 
-“能力与集成”页面只消费 Framework 的动态 projection。每个 Package 行应显示：
+App owner 选择的通用 Package 管理面只消费 Framework 的动态 projection。每个
+Package 行应显示：
 
 - identity、名称、Package role 与声明的 capabilities；
 - presence、installed/callable/readiness、局部诊断和 configured carrier route；
@@ -92,9 +104,11 @@ projection。文档不保存某一天的 installed/enabled 表，也不从 descr
 一个 Package 的 carrier 操作失败，只影响该 Package 和其直接依赖。其他 Package、
 其他已安装能力和既有领域数据必须继续可用。
 
-## 暂缓的标准视图与统一审核
+## 标准视图与统一审核的 owner 条件
 
-以下产品切片方向正确，但**本轮暂缓执行**：
+以下是跨 owner 验收目标，不是 Persona-owned App roadmap。它们当前是 implemented、
+partial 还是 deferred，必须从 OPL App owner 的 contracts/source/runtime fresh readback
+判断，不能由本文冻结：
 
 1. 在 OPL App 正式 mount 标准 `list_detail`、`timeline`、`approval_diff`、
    `task_board`、`artifact_view` 与 `activity_log` renderer。
@@ -125,33 +139,34 @@ Persona 的“批准提案”只允许进入该 proposal 的下一条 owner rout
 网站、知识库或邮件系统。Relay 的“发送”只能对回读确认的 Apple Mail 草稿执行。App
 只渲染结构化数据、调用 opaque action、显示结果，绝不成为第二邮件引擎或直接外部写入者。
 
-## 实施状态与顺序
+## Authority 顺序
 
-本规划不恢复已退役的 legacy Package Manager。source contract、host currentness 和
-仍待实施的 W4/UI 路径必须分开记录：
+本规划不恢复已退役的 legacy Package Manager。下图只表达 authority 与验收依赖，
+不是各仓当前状态 dashboard；source contract、host currentness 与 App/Shell 产品
+currentness 必须分别从其 owner SSOT 回读：
 
 ```text
-W3 Framework source contract                      PRESENT
+W3 Framework source contract                      READ FRAMEWORK OWNER SSOT
   dynamic installed discovery + carrier delegation + aggregation
        |
        v
 Package owners
-  canonical Relay/Persona descriptors and contributions  PRESENT
+  canonical Relay/Persona descriptors and contributions  READ OWNER SSOT
        |
        v
 Host carrier / projection readback                FRESH PER HOST
   codex plugin state + current Framework/App projection
        |
        v
-Resource Binding + owner adapters                 ACTIVE SEPARATE LANES
+Resource Binding + owner adapters                 READ DOMAIN OWNER SSOT
   private binding config + health + approved apply/readback
        |
        v
-W4 App / Shell                                    PARTIAL / DEFERRED
+W4 App / Shell                                    READ APP OWNER SSOT
   role-neutral inventory + semantic renderers + local unavailable state
        |
        v
-Unified review slice                              DEFERRED
+Unified review slice                              READ APP/DOMAIN OWNER SSOT
   standard renderers + unified approvals + Relay/Persona data/action bridges
 ```
 
@@ -185,13 +200,15 @@ Unified review slice                              DEFERRED
 6. 每一项统一审核都保留其 evidence、确认、owner action 和最终 authority readback；
    App 不能绕过 Relay 直接发送，也不能绕过网站/知识库 adapter 直接写入。
 
-## 当前行动
+## 合法下一入口
 
-W3 source contract 与 Relay/Persona owner descriptor 已存在；目标主机仍须先完成
-native carrier 和 current Framework/App projection readback。该 readback 成功后，
-可以按独立 write set 推进 Resource Binding、Persona Inbox、Obsidian approved-apply、
-网站 owner route 和 Relay 草稿 handoff；失败时只修通用 discovery/currentness 路径。
+Fresh source readback 显示 Framework 通用 projection 与 Relay/Persona owner descriptor
+存在；目标主机仍须独立完成 native carrier 和 current Framework/App projection
+readback。readback 成功后，各 owner 只从自己的 active contract 和 write set 选择
+Resource Binding、Persona Inbox、Obsidian approved-apply、网站 route 或 Relay 草稿
+handoff；失败时由 currentness owner 修复通用 discovery/currentness 路径。
 
-OPL App/Shell 的标准 view mount、统一审核队列、通用 Package mutation 控件仍保持
-`deferred_execution`。这些 UI 只有在相应 read model、opaque action、确认要求与最终
-authority readback 都可由 owner route 提供后才实施，不能由 App 自行补造领域状态。
+OPL App/Shell 的标准 view mount、统一审核队列和通用 Package mutation 控件是否已
+实施、部分实施或 deferred，必须 fresh 读取 App owner SSOT；Persona 不推进或关闭该
+状态。无论当前阶段如何，这些 UI 都不能在缺少 owner read model、opaque action、确认
+要求与最终 authority readback 时补造领域状态。
