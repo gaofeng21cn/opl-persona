@@ -1,11 +1,22 @@
 # OPL Personal Communication and Persona Architecture
 
-Status: active design guidance, v1
+Owner: `opl-persona`
 
-This document is the cross-repository design authority for the personal
+Purpose: `persona_cross_repository_target_architecture`
+
+State: `active_target_design`
+
+Machine boundary: This document defines the intended cross-repository product
+shape and owner boundaries. Current Persona exports and callable behavior are
+owned by the Package descriptor, runtime source, tests, and
+[Persona Architecture](architecture.md). Form filling, personal-profile field
+coordination, external-portal providers, and their adapters or receipts remain
+target design until those owner surfaces exist and are read back; this document
+does not make them installed, callable, approved, or released.
+
+This document is the cross-repository target-design authority for the personal
 communication and PI digital-persona surfaces. It defines ownership and
-integration boundaries; it is not a promise that every planned UI, adapter, or
-external write is already released.
+integration boundaries, not current runtime inventory.
 
 ## Product intent
 
@@ -29,10 +40,10 @@ OPL App        user-facing host, chat, navigation, views, approvals
 ```
 
 Packages are distribution carriers, not a synonym for one domain ability. The
-internal composition model separates Package, Capability Contract, Provider
-Adapter, user Resource Binding, and Persona Recipe. This keeps mail, knowledge,
-website, form, and portal modules optional and replaceable without adding a
-fourth public product layer. See
+target composition model separates Package, Capability Contract, Provider
+Adapter, user Resource Binding, and Persona Recipe. It is intended to keep mail,
+knowledge, website, form, and portal modules optional and replaceable without
+adding a fourth public product layer. See
 [Composable Capability and Integration Model](integration-capability-composition.md).
 
 Codex CLI, Codex App, and `app-server` are execution surfaces used by the
@@ -147,12 +158,15 @@ Persona can maintain proposal state and provenance, but an accepted proposal is
 still not an external write until the owning adapter executes it and reads back
 the resulting authority.
 
-For personal profile and external professional work, Obsidian is the authority
-for the user's maintained profile values, including identity, employment,
-contact, payment, tax, and document fields. Persona only coordinates field
-references, provenance, currentness, purpose, and reviewable form proposals.
-The detailed boundaries live in [Personal Profile and Form Fill](personal-profile-form-fill.md)
-and [External Professional Work](external-professional-work.md). Portal login
+For the personal-profile and external-professional-work target, Obsidian remains
+the authority for user-maintained profile values, including identity,
+employment, contact, payment, tax, and document fields. A future Persona owner
+surface may coordinate field references, provenance, currentness, purpose, and
+reviewable form proposals. Current source does not export a `personal_profile`
+or `form_fill` Core, a `personal-form-fill` Skill, or any form/portal action,
+adapter, or receipt. The target boundaries live in
+[Personal Profile and Form Fill](personal-profile-form-fill.md) and
+[External Professional Work](external-professional-work.md). Portal login
 credentials and authenticated sessions remain a separate access concern.
 
 ### OPL App and Shell
@@ -277,6 +291,18 @@ The first vertical slice is intentionally conservative:
    routing can discover Relay and Persona. Semantic App/Shell view rendering,
    unified approvals, Binding health UI, and carrier mutation controls remain
    separate acceptance gates.
+
+The Persona descriptor currently exports only the `opl-persona` Skill and the
+`personal.context.v1`, `personal.memory.v1`, `personal.inbox.v1`,
+`knowledge.obsidian.v1`, `communications.mail.v1`, and
+`website.publication.v1` modules. Current CLI proposal builders cover
+publication, memo, mail triage, Inbox capture, and Obsidian notes. The App ABI
+can build only the mail-triage, Inbox-capture, and Obsidian-note proposals; its
+context reads and proposal inspect/approve actions still report their distinct
+unconfigured states. Resource Binding is a private refs-only
+store whose current CLI accepts only Obsidian directory bindings and probes.
+There is no current field registry, form route, portal provider, or external
+submission path.
 
 The next implementation work should connect these existing surfaces through
 fresh installation and runtime readback. It must not weaken proposal approval or

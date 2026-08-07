@@ -1,8 +1,16 @@
 # OPL Persona Architecture
 
-The cross-repository design authority is
-[Architecture Guidance](architecture-guidance.md). This file keeps the
-Persona-specific owner split and v1 contract close to the implementation.
+Owner: `opl-persona`
+
+Purpose: `persona_current_implementation`
+
+State: `active`
+
+Machine boundary: This document describes the current Persona implementation.
+The Package descriptor, runtime source, and tests remain machine authority.
+[Architecture Guidance](architecture-guidance.md) owns the cross-repository
+target design; its form and portal surfaces are not current exports merely
+because they are documented.
 
 ## Owner split
 
@@ -16,16 +24,48 @@ store, knowledge vault, or website CMS.
 | `gflab_web` | public publication/news content and deployment |
 | OPL Persona | shared PI context, provenance, proposal shape, approval state |
 
-## v1 contract
+## Current exported surfaces
+
+The Package descriptor exports one Skill, `opl-persona`, and these Core module
+identities:
+
+```text
+personal.context.v1
+personal.memory.v1
+personal.inbox.v1
+knowledge.obsidian.v1
+communications.mail.v1
+website.publication.v1
+```
+
+The CLI implements proposal builders for publication, memo, mail triage, Inbox
+capture, and Obsidian notes. Its current proposal routes are:
+
+```text
+publication input -> knowledge.publication + gflab_web.content.publication
+Obsidian memo -> gflab_web.content.post + opl-relay.draft.context
+mail evidence -> communications.mail.v1#triage + personal.inbox.v1
+Inbox input -> personal.inbox.v1
+knowledge input -> knowledge.obsidian.note.v1
+```
+
+The App contribution ABI exposes three data refs and five action refs. Only
+`personal.inbox.v1#recent` has a configured read-model store. Context reads
+return `input_required`; proposal inspect/approve return
+`owner_handler_required`. The executable proposal actions are limited to:
+
+```text
+communications.mail.v1#triage.propose
+personal.inbox.v1#capture.propose
+knowledge.obsidian.v1#note.propose
+```
+
+## Current proposal contract
 
 The only cross-system write primitive is a reviewable proposal:
 
 ```text
-publication -> knowledge.ingest + website.publication
-Obsidian memo -> website.article + mail.draft_context
-mail evidence -> personal.inbox.v1 capture + mail.triage
-knowledge input -> knowledge.obsidian.note.v1 create/update proposal
-personal profile -> personal.form.* draft/fill proposal
+source evidence -> opl-persona-proposal.v1 -> user review -> owner adapter
 ```
 
 Each proposal contains a stable id, an explicit target, payload, source
@@ -60,36 +100,22 @@ current SHA-256 digest for update. Persona has no apply operation. The note
 adapter must check that precondition after the user approves the exact proposal
 and before any vault write.
 
-## Personal profile and external professional work
+## Current Resource Binding
 
-Personal profile values, including identity, employment, contact, payment,
-tax, and document fields, are maintained in the user's Obsidian vault for
-convenient reuse. Persona keeps only field references, provenance, currentness,
-purpose, and approval state; it does not create a second profile database or
-copy those values into Git, plugin caches, chat history, or App state.
-The vault path is supplied only by a Profile Workspace Resource Binding; Persona
-does not carry a default vault path or environment-variable override.
 The private binding store is
-`<profile>/data/persona/resource-bindings.json`. Callers select a binding by
-opaque id; only the Obsidian owner adapter resolves its `file://` resource ref
-at the point of use.
+`<profile>/data/persona/resource-bindings.json`. It holds opaque refs, scopes,
+policy metadata, and health metadata; it never holds credentials or authority
+content. The current CLI can set and check only an Obsidian directory binding,
+with `knowledge.obsidian.v1` or `knowledge.documents.v1` as the capability. The
+health check proves directory reachability only.
 
-The detailed contracts are:
-
-- [Composable Capability and Integration Model](integration-capability-composition.md)
-  — Package、Capability、Provider、Binding 与 Persona Recipe 的组合边界。
-- [Personal Profile and Form Fill](personal-profile-form-fill.md) — the
-  `personal_profile` and `form_fill` Core boundary and form adapters.
-- [External Professional Work](external-professional-work.md) — third-party
-  professional portals, task scope, and per-action approval.
-
-Portal login credentials and authenticated browser sessions remain separate
-from personal profile values and follow the portal access policy.
-
-Knowledge, mail, website, form, and portal integrations are optional capability
-providers rather than hard-coded Persona subsystems. The PI recipe recommends a
-knowledge binding and can select mail, website, form, or portal bindings only
-when the user configures them.
+Persona therefore has no current personal-profile field registry, form model,
+form action, external-portal provider, portal adapter, or submission receipt.
+Those are target designs in
+[Personal Profile and Form Fill](personal-profile-form-fill.md),
+[External Professional Work](external-professional-work.md), and
+[Composable Capability and Integration Model](integration-capability-composition.md).
+They do not become callable through a generic Resource Binding record.
 
 ## Runtime data
 
