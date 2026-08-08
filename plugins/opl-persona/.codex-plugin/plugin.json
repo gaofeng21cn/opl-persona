@@ -6,7 +6,7 @@
     "name": "OPL"
   },
   "repository": "https://github.com/gaofeng21cn/opl-persona",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["persona", "memory", "knowledge", "mail", "website"],
   "skills": "./skills/",
   "interface": {

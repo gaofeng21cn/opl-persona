@@ -170,4 +170,4 @@ checks in addition to the test suite.
 
 ## License
 
-OPL Persona is available under the [MIT License](./LICENSE).
+OPL Persona is available under the [Apache License 2.0](./LICENSE).

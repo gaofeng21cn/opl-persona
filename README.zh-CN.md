@@ -150,4 +150,4 @@ actionlint .github/workflows/ci.yml
 
 ## 许可证
 
-OPL Persona 采用 [MIT License](./LICENSE)。
+OPL Persona 采用 [Apache License 2.0](./LICENSE)。
