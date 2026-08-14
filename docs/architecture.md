@@ -49,10 +49,14 @@ Inbox input -> personal.inbox.v1
 knowledge input -> knowledge.obsidian.note.v1
 ```
 
-The App contribution ABI exposes three data refs and five action refs. Only
-`personal.inbox.v1#recent` has a configured read-model store. Context reads
-return `input_required`; proposal inspect/approve return
-`owner_handler_required`. The executable proposal actions are limited to:
+The App contribution ABI exposes three data refs and five action refs. The
+Persona-owned read-model store serves both `personal.context.v1#today` and
+`personal.inbox.v1#recent` as refs-only projections: `today` includes active
+(`staged` or `routed`) Inbox entries, while `recent` includes all entries. The
+projection contains bounded summaries and opaque source refs, never source
+content. `personal.context.v1#proposals` remains `input_required`; proposal
+inspect/approve return `owner_handler_required`. The executable proposal
+actions are limited to:
 
 ```text
 communications.mail.v1#triage.propose
@@ -99,6 +103,14 @@ and a target precondition: `expected_digest` is `absent` for creation or the
 current SHA-256 digest for update. Persona has no apply operation. The note
 adapter must check that precondition after the user approves the exact proposal
 and before any vault write.
+
+## Host Boundary
+
+OPL Framework is the single Cordis Host for the OPL composition. Persona is a
+Python domain Package that contributes its existing `app-contribution` ABI; it
+does not create a Cordis Host, Context registry, provider container, or second
+lifecycle manager. Framework owns process/session/attempt assembly and passes
+only the declared contribution calls through to Persona-owned handlers.
 
 ## Current Resource Binding
 

@@ -51,7 +51,7 @@
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:07a098097d78a6ba201c7ad62ee73619912696ada603b498046049743d74d94c"
+    "digest": "sha256:9ba6fe123d57a805d7a8a8429479d41c9a4ff7b672774fa3ebaaf4c54dd5a4d5"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

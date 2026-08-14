@@ -173,19 +173,19 @@ def _unavailable_data(contract: dict[str, Any]) -> dict[str, object]:
     }
 
 
-def _inbox_read(contract: dict[str, Any]) -> dict[str, object]:
-    items = [
-        item.to_dict()
-        for item in InboxStore.from_paths(PersonaPaths.resolve()).list()
-    ]
+def _inbox_read(contract: dict[str, Any], *, active_only: bool = False) -> dict[str, object]:
+    items = InboxStore.from_paths(PersonaPaths.resolve()).list()
+    if active_only:
+        items = [item for item in items if item.status in {"staged", "routed"}]
+    projected_items = [item.to_dict() for item in items]
     return {
         "kind": "data",
         "state": "ready",
         "result_schema": contract["result"],
         "input_schema": contract["input"],
         "data": {
-            "items": items,
-            "count": len(items),
+            "items": projected_items,
+            "count": len(projected_items),
             "source_policy": "persona_private_refs_only",
         },
     }
@@ -264,8 +264,8 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
         _validate_input(_request_input(request.get("input")), contract)
         if operation == "read":
             result = (
-                _inbox_read(contract)
-                if ref == "personal.inbox.v1#recent"
+                _inbox_read(contract, active_only=ref == "personal.context.v1#today")
+                if ref in {"personal.context.v1#today", "personal.inbox.v1#recent"}
                 else _unavailable_data(contract)
             )
         else:

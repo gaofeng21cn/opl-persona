@@ -39,6 +39,12 @@ OPL base       runtime, installed discovery, carrier delegation, aggregation, ex
 OPL App        user-facing host, chat, navigation, views, approvals
 ```
 
+OPL Framework is the single Cordis Host for this composition. Domain Packages
+such as Persona and Relay remain independently usable providers behind their
+declared Package and `app-contribution` contracts; they must not each create a
+Cordis Host, service registry, or parallel lifecycle manager. Cordis owns host
+assembly and resource lifecycle, while Package owners retain domain authority.
+
 Packages are distribution carriers, not a synonym for one domain ability. The
 target composition model separates Package, Capability Contract, Provider
 Adapter, user Resource Binding, and Persona Recipe. It is intended to keep mail,

@@ -69,6 +69,50 @@ def test_read_returns_typed_unavailable_projection_without_private_data(monkeypa
     }
 
 
+def test_read_projects_active_persona_context_refs_only(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
+    store = InboxStore.from_paths(PersonaPaths.resolve())
+    active = store.capture(
+        capture_id="paper://active",
+        item_kind="paper",
+        title="Active paper",
+        summary="A bounded active summary.",
+        source_refs=["https://example.org/active"],
+    )
+    terminal = store.capture(
+        capture_id="paper://terminal",
+        item_kind="paper",
+        title="Terminal paper",
+        summary="A bounded terminal summary.",
+        source_refs=["https://example.org/terminal"],
+    )
+    store.route(terminal.item_id, "proposal://knowledge/terminal", status="consumed")
+
+    code, response = run_cli(
+        monkeypatch,
+        capsys,
+        {
+            "schema_version": REQUEST_SCHEMA,
+            "operation": "read",
+            "ref": "personal.context.v1#today",
+            "input": {},
+        },
+    )
+
+    assert code == 0
+    result = response["result"]
+    assert result["state"] == "ready"
+    assert result["result_schema"] == "personal.context.v1#today.result"
+    assert result["data"] == {
+        "items": [active.to_dict()],
+        "count": 1,
+        "source_policy": "persona_private_refs_only",
+    }
+    assert "body" not in result["data"]["items"][0]
+
+
 def test_read_projects_persona_private_inbox_refs_only(monkeypatch, capsys, tmp_path: Path) -> None:
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
     InboxStore.from_paths(PersonaPaths.resolve()).capture(
