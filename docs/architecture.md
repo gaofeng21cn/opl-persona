@@ -79,38 +79,40 @@ change, sent email, or written vault note.
 
 ## Inbox and Obsidian proposal contracts
 
-`mail.triage` is a policy-bound interpretation of one validated Relay
-`opl-relay-mail-triage-evidence.v2` facts envelope with a canonical
-`email-store://` source reference. Persona loads the user's private Markdown
-rules from `<profile>/policies/` and hashes the selected file bytes,
-not merely a list of policy refs. It records a classification, priority,
-rationale, uncertainty, recommended action, policy references, and a content
-`policy_digest`. Recipient evidence (`to`, `cc`, `bcc`) comes only from Relay.
-Persona resolves the user's own addresses, actual first author, team-member
-match, forwarding target, follow-up owner, and notification suggestion from
-the selected Profile's private Markdown context and records a separate
-`context_digest`. A Relay refs-set digest is retained only as
-`relay_policy_digest` provenance and never becomes Persona's content digest.
-The proposal also emits a generic `personal.inbox.v1` capture for Persona's
-private staging provider. The Inbox stores only source refs, a bounded summary,
-state, and owner routes; it does not copy the mail body. An App may project that
-staging without becoming a second mailbox. Missing mail, policy, or identity
-provenance fails closed.
+`mail.triage` consumes one validated Relay facts envelope and Persona's private
+policy/context snapshots. It produces a reviewable decision and a refs-only
+Inbox capture; missing evidence fails closed. Policy loading, content digests
+and recipient interpretation belong to [Mail Policy](mail-policy.md).
+Persona never treats the Relay refs-set digest as its own policy-content
+digest or turns a triage proposal into a mailbox write.
+
+`inbox.py` stores `opl-persona-inbox.v1` at `data/persona/inbox/items.json`.
+Its item states are `staged`, `routed`, `consumed`, and `discarded`; route refs
+are opaque references. `consumed` is a local recorded state, not independently
+verified external delivery. A caller must obtain the target owner's receipt
+before using it to report successful delivery.
 
 `knowledge.obsidian.note.v1` is a proposal for exactly one relative Markdown
 target path. It carries frontmatter, body, links, tags, evidence references,
 and a target precondition: `expected_digest` is `absent` for creation or the
-current SHA-256 digest for update. Persona has no apply operation. The note
-adapter must check that precondition after the user approves the exact proposal
-and before any vault write.
+current SHA-256 digest for update. The CLI and App proposal actions do not apply
+notes. The separate owner adapter in `obsidian_apply.py` implements
+`apply_approved_obsidian_note`: it requires an exact proposal digest, a separate
+approved record with `external_write_allowed=true`, and a Resource Binding with
+`notes.write` scope. It rejects unsafe paths and symlinks, rechecks the target
+digest before atomic replacement, and compares the actual written bytes before
+returning `opl-persona-obsidian-apply-receipt.v1`. This library API and its tests
+do not establish a public CLI/App apply action or a configured private vault.
 
 ## Host Boundary
 
-OPL Framework is the single Cordis Host for the OPL composition. Persona is a
-Python domain Package that contributes its existing `app-contribution` ABI; it
-does not create a Cordis Host, Context registry, provider container, or second
-lifecycle manager. Framework owns process/session/attempt assembly and passes
-only the declared contribution calls through to Persona-owned handlers.
+OPL Framework owns the Host for runtime, Package graph, and App projection.
+Studio owns its separate DSH application-host composition; the two scopes
+collaborate through public contracts and do not share internal registries or
+currentness. Persona contributes its Python `app-contribution` ABI through the
+Framework boundary and does not create another Host or lifecycle manager.
+App consumption and review requirements belong to
+[App Integration](app-integration.md).
 
 ## Current Resource Binding
 
@@ -119,7 +121,10 @@ The private binding store is
 policy metadata, and health metadata; it never holds credentials or authority
 content. The current CLI can set and check only an Obsidian directory binding,
 with `knowledge.obsidian.v1` or `knowledge.documents.v1` as the capability. The
-health check proves directory reachability only.
+health check proves directory reachability only. `bindings.py` owns
+`opl-persona-resource-binding.v1` and `opl-persona-resource-health.v1`; health
+values are `healthy`, `degraded`, `unavailable`, or `unknown`. A stored health
+observation must not be used as a fresh authorization or content readback.
 
 Persona therefore has no current personal-profile field registry, form model,
 form action, external-portal provider, portal adapter, or submission receipt.

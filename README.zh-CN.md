@@ -77,7 +77,7 @@ opl-persona --json binding check --id my-knowledge
 使用同一个分身工作空间单独完成。
 
 完整的提案合同与职责边界见
-[架构指引](./docs/architecture-guidance.md)。
+[实现架构](./docs/architecture.md)；跨仓目标设计见[架构指引](./docs/architecture-guidance.md)。
 
 ## 在 Codex 中使用
 

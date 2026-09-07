@@ -89,7 +89,8 @@ Persona does not read the vault during binding setup. Configure mail separately
 with OPL Relay using the same Profile Workspace.
 
 For the complete proposal contract and owner boundaries, see
-[Architecture Guidance](./docs/architecture-guidance.md).
+[Persona Architecture](./docs/architecture.md). Cross-repository target design
+is in [Architecture Guidance](./docs/architecture-guidance.md).
 
 ## Use With Codex
 

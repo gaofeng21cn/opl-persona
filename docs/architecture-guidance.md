@@ -39,11 +39,12 @@ OPL base       runtime, installed discovery, carrier delegation, aggregation, ex
 OPL App        user-facing host, chat, navigation, views, approvals
 ```
 
-OPL Framework is the single Cordis Host for this composition. Domain Packages
-such as Persona and Relay remain independently usable providers behind their
-declared Package and `app-contribution` contracts; they must not each create a
-Cordis Host, service registry, or parallel lifecycle manager. Cordis owns host
-assembly and resource lifecycle, while Package owners retain domain authority.
+OPL Framework owns the Host for runtime, Package graph, and App projection.
+Studio separately owns DSH profile/plugin/executor and delivery composition.
+The two Hosts cooperate through public App state/action, authentication, and
+channel callbacks, without sharing registries, sessions, or currentness.
+Persona and Relay use their declared Package and `app-contribution` contracts;
+neither creates another Host or transfers its domain authority to a host.
 
 Packages are distribution carriers, not a synonym for one domain ability. The
 target composition model separates Package, Capability Contract, Provider
@@ -81,7 +82,8 @@ system keeps its own source of truth.
 | --- | --- | --- |
 | `one-person-lab` | Generic Package contracts, installed discovery, carrier delegation, and aggregation | Package publication, carrier physical state, mail, Persona, website, or UI business state |
 | `one-person-lab-app` | App product contract, page state, contribution consumption, acceptance | Domain data, mail semantics, website deployment |
-| `opl-aion-shell` | Desktop renderer/process/package implementation | Product contracts or domain authority |
+| `opl-aion-shell` | Current Stable Shell implementation | App product contracts or domain authority |
+| `opl-studio` | DSH application host, native Codex and delivery transport composition | Framework Package graph or domain authority |
 | `opl-relay` | Mail identities, evidence, relationship memory, draft lifecycle, send receipts | Persona orchestration, website CMS, Obsidian vault |
 | `opl-persona` | PI context, provenance, cross-domain proposal shape and proposal state | Mail store, private vault, website source, credentials |
 | `gflab_web` | Public publication/news source, Hugo build, deployment source | Private Persona state or mail state |
@@ -152,7 +154,7 @@ The v1 proposal routes are:
 
 ```text
 publication input
-  -> knowledge.ingest proposal
+  -> knowledge.publication proposal
   -> gflab_web.content.publication proposal
 
 Obsidian technical memo
@@ -183,19 +185,12 @@ read-model references, commands, and approval surfaces. The App must not
 special-case `opl-relay` or `opl-persona`, force either package into a
 `standard_agent` role, or implement a second mail engine.
 
-The first reusable view kinds are:
-
-```text
-list_detail   timeline   approval_diff   task_board
-artifact_view activity_log
-```
-
 The Shell renders the App contract. It should not invent domain semantics or
 persist a shadow copy of Package state.
 
-The deferred implementation plan for role-neutral capability management and
-unified approval views is in
-[OPL App Capability Management and Unified Approval Plan](deferred-opl-app-capability-management.md).
+Persona's consumer and review requirements are in
+[App Integration](app-integration.md). Renderer inventory and delivery plans
+remain in the App owner repository.
 
 ## Proposal-first mutation model
 
@@ -222,29 +217,12 @@ The default proposal policy is:
 }
 ```
 
-For an inbox decision, Persona also requires a stable `email-store://`
-evidence reference inside a validated `opl-relay-mail-triage-evidence.v2`
-facts-only bridge. Scattered header fields are not a supported Persona input.
-The resulting `mail.triage` proposal contains classification, priority,
-rationale, uncertainty, recommended action, `policy_refs`, and a SHA-256
-content `policy_digest` computed from the selected Persona-workspace Markdown
-bytes; its companion `personal.inbox.v1` capture进入 Persona 私有 staging。
-Relay includes a refs-set digest as bridge provenance, but Persona must reload
-every Markdown file under `<profile>/policies/` before creating the final
-content digest. Missing Markdown fails closed; an external digest cannot
-authorize a bypass. Recipient routing evidence includes To/Cc/Bcc and may
-produce first-author, team-member, forwarding, follow-up, and notification
-fields only when supporting evidence exists.
-该 staging 只保存 source refs、有界摘要、状态与路由，不复制邮件正文，因此不会成为
-第二邮箱。完整条目和 Binding 合同见
-[Composable Capability and Integration Model](integration-capability-composition.md)。
-
-For Obsidian, `knowledge.obsidian.note.v1` can propose exactly one `create` or
-`update`. It carries a relative `target_path`, frontmatter, body, links, tags,
-evidence refs, and an `expected_digest` precondition. The contract explicitly
-allows only a reviewable proposal and forbids direct vault, filesystem, mail,
-or website writes. The Obsidian authority must re-check the precondition after
-approval before mutating a vault.
+Mail interpretation requires validated Relay evidence and Persona's private
+policy content, as defined by [Mail Policy](mail-policy.md). Inbox keeps only
+bounded context and source refs. Obsidian writes require a separate owner
+adapter, exact approval, Binding scope and a current target precondition.
+The implemented contracts and their limits belong to
+[Persona Architecture](architecture.md).
 
 Therefore these are distinct states:
 
@@ -279,40 +257,13 @@ Recipes combine the selected bindings for roles such as PI, academic editor, or
 reviewer. Installation alone never proves that a Binding is configured,
 authorized, healthy, or capable of external writes.
 
-## Current implementation phase
+## Implementation References
 
-The first vertical slice is intentionally conservative:
-
-1. Relay Core, Plugin, Package, and Apple Mail review lifecycle are available.
-2. Persona Core, Plugin, Package, and proposal contracts are available.
-3. The `gflab_web` owner adapter can bind an exact approved proposal to a
-   linked, non-default local Git worktree, apply the content, run Hugo
-   validation, and return a local digest readback. It cannot commit, push,
-   create a pull request, or deploy; local apply is not publication.
-4. Relay can read Persona mail-context proposals without creating or sending a
-   message. Relay still creates the Apple Mail draft, the user reviews it,
-   Relay re-inspects its current fingerprint, and an explicit confirmation is
-   required before send and send readback.
-5. Framework discovery, status/action projection, and role-neutral contribution
-   routing can discover Relay and Persona. Semantic App/Shell view rendering,
-   unified approvals, Binding health UI, and carrier mutation controls remain
-   separate acceptance gates.
-
-The Persona descriptor currently exports only the `opl-persona` Skill and the
-`personal.context.v1`, `personal.memory.v1`, `personal.inbox.v1`,
-`knowledge.obsidian.v1`, `communications.mail.v1`, and
-`website.publication.v1` modules. Current CLI proposal builders cover
-publication, memo, mail triage, Inbox capture, and Obsidian notes. The App ABI
-can build only the mail-triage, Inbox-capture, and Obsidian-note proposals; its
-context reads and proposal inspect/approve actions still report their distinct
-unconfigured states. Resource Binding is a private refs-only
-store whose current CLI accepts only Obsidian directory bindings and probes.
-There is no current field registry, form route, portal provider, or external
-submission path.
-
-The next implementation work should connect these existing surfaces through
-fresh installation and runtime readback. It must not weaken proposal approval or
-move domain authority into OPL App.
+[Persona Architecture](architecture.md) owns the current Persona source map,
+including Inbox reads, proposal-only CLI/App actions and the separate approved
+Obsidian adapter. [Distribution](distribution.md) owns carrier and publication
+boundaries. Relay and `gflab_web` describe their own adapters and actual limits.
+This target design does not keep a second implementation-status inventory.
 
 ## Change rules
 

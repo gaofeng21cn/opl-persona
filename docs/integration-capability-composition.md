@@ -1,289 +1,85 @@
 # OPL Persona 可组合能力与集成模型
 
 Owner: `opl-persona`
-
 Purpose: `persona_composable_capability_target_design`
-
 State: `active_target_design`
 
-Machine boundary: 本文持有 Persona 可组合能力的目标设计，不是当前实现 inventory。
-当前 Package exports、callable action、Resource Binding 与 App contribution 以
-Package descriptor、runtime source、tests 和
-[Persona Architecture](architecture.md) 为机器真相。当前实现只提供现有
-descriptor-backed modules/actions 与 Obsidian Resource Binding CLI；
-`personal.profile.v1`、`forms.fill.v1`、`external.portal.v1`、Recipe/provider catalog、
-form/portal adapter 和 receipt 在对应 owner source/tests 与 authority readback 出现前
-仍是 target-only。本文明确标为当前的 Provider ID/action ref 继续是 active export，
-不得因本文的 target-design 状态被写成已退役。
+本文定义可替换能力的目标组合关系。当前 exports、Binding schema、Inbox 状态和可执行动作
+只在[实现架构](architecture.md)及其源码维护；本文不新增另一套机器合同或兼容入口。
+个人资料、表格、专业门户与 Recipe catalog 尚不是当前可调用能力。
 
-本文件定义目标形态下 OPL Persona 如何把知识库、邮件、网站、表格和外部专业门户组合成
-可选择、可替换、可发现的能力。它补充
-[Architecture Guidance](architecture-guidance.md)，但不增加新的面向用户产品层。
+## 对象分工
 
-## 结论
-
-网站、邮箱、知识库等不能写死为 Persona 内部固定子系统。它们应通过同一种组合模型接入：
-
-```text
-OPL Package
-  -> Capability Contract
-  -> Provider Adapter
-  -> User Resource Binding
-  -> Persona Recipe / Profile
-```
-
-这五个概念解决不同问题，不能合并成一个“万能插件”：
-
-| 概念 | 回答的问题 | 示例 |
+| 对象 | 负责的问题 | 约束 |
 | --- | --- | --- |
-| OPL Package | 代码和元数据如何发现、安装、更新、停用 | `opl-relay`、`opl-persona` |
-| Capability Contract | 一个能力对 Persona 保证什么语义 | `communications.mail.v1`、`publishing.site.v1` |
-| Provider Adapter | 由什么实现上述语义 | Relay、Obsidian adapter、`gflab_web` adapter |
-| Resource Binding | 当前用户授权操作哪个真实资源 | SYSU 邮箱、个人 Obsidian vault、实验室网站 |
-| Persona Recipe / Profile | 某类角色和任务组合哪些 Binding | PI、学术编辑、审稿专家 |
+| Package | 能力代码与 descriptor 的安装单元 | owner 声明 identity、依赖和 publication；原生 carrier 执行物理生命周期 |
+| Capability | Provider 对消费者保证的领域语义 | 不把 UI 页面、文件路径或安装包当成语义 identity |
+| Provider Adapter | 实现能力并返回实际 action refs | 保留外部系统 authority，不接管跨域判断 |
+| Resource Binding | 用户选择并授权的具体资源 | 私有 refs、scopes、policy；不复制秘密或正文 |
+| Persona Recipe | 为角色和工作组合能力与 Binding | 不复制代码或数据，不成为另一个 runtime |
 
-OPL Package 是分发和生命周期边界，不等于领域能力本身。一个 Package 可以提供多个
-Capability；同一个 Capability 也可以存在多个 Provider。Binding 是用户私有配置实例，
-不能打进 Package 或 Git。Recipe 只引用 Capability 与 Binding，不复制外部系统数据。
+一个 Package 可以提供多个能力，同一能力可以有多个 Provider。同一 Provider 可以绑定多个
+资源；移除 Binding 不应卸载 Provider 或影响其他资源。Package 移除、Binding 移除、凭据撤销
+和外部数据删除是四个独立动作。
 
-## 公共产品层保持不变
+Framework 发现 installed descriptor、委托 carrier 并聚合状态；App 消费结构化贡献。
+Persona 只持有跨域判断、provenance 和 proposal。详细消费规则归
+[App 集成](app-integration.md)，领域分工归[架构指引](architecture-guidance.md)。
 
-可组合能力是 OPL Packages 的内部合同，不是新的第四个公共产品层：
+## 能力与真实调用
 
-```text
-Package owner  identity、Capability、dependency intent、App contribution 与 publication
-Native carrier install、update、repair、remove 与物理 installed readback
-OPL Framework  installed descriptor discovery、carrier action 委托与状态聚合
-OPL App        对话、可视化、审批、组合与状态呈现
-```
+邮件、知识、网站、个人资料、表格、门户和 Inbox 是组合需求，不是一张预注册的产品清单。
+已导出的 `knowledge.obsidian.v1`、`website.publication.v1`、`communications.mail.v1`
+和 `personal.inbox.v1` 仍按 descriptor 与调用者的实际合同使用。
+`knowledge.documents.v1` 已被 Obsidian Binding 接受，但不表示存在通用 Provider resolver。
+`publishing.site.v1`、`personal.profile.v1`、`forms.fill.v1` 和 `external.portal.v1`
+只属于设计候选，不能由 App 根据本文推导可调用动作。
 
-Persona 是跨域判断、provenance 和 proposal 编排者；它不成为邮箱、知识库、网站、表格
-或第三方门户的第二份数据库。OPL App 也不拥有这些领域语义，只消费结构化贡献并呈现
-安装、配置、健康状态、任务、审批差异和回读结果。
+后续增加通用能力时，由真实 Provider 声明所支持语义并返回 opaque action ref；消费者使用
+该声明，不在 App 建立硬编码映射。Capability identity、action ref 与 proposal schema
+各自负责不同合同。旧出口在真实调用者切换后一起退役，不创建永久别名或兼容层；已经发布的
+identity 不得复用为另一种语义。
 
-## 首批 Capability Contracts
+Provider 只暴露实际支持的 inspect/health、read/search、propose、approved apply 或 readback。
+某个 Provider 可以只读；安装不能推导可写。所有跨系统写入仍使用精确的
+`opl-persona-proposal.v1`、用户批准、owner adapter 和最终 authority readback。
 
-首批合同保持小而稳定：
+## Binding 与健康
 
-| Capability ID | 最小语义 | 典型 Provider |
-| --- | --- | --- |
-| `knowledge.documents.v1` | 搜索、读取、提出新增或更新知识文档 | Obsidian adapter |
-| `communications.mail.v1` | 检索邮件证据、生成草稿、经批准执行并回读 | OPL Relay |
-| `publishing.site.v1` | 读取公开内容状态、提出内容变更、经批准发布并回读 | `gflab_web` adapter |
-| `personal.profile.v1` | 按用途解析用户维护的个人资料字段及 provenance | Obsidian profile adapter |
-| `forms.fill.v1` | 检查模板、映射字段、生成草稿、经批准写入并回读 | DOCX/PDF/XLSX/Portal adapter |
-| `external.portal.v1` | 读取专业任务、准备受控动作、经批准提交并回读 | Browser/API portal adapter |
-| `personal.inbox.v1` | 接收跨域 capture，形成待整理、待核验或待行动条目 | Persona inbox provider |
+Binding 存放在选定 Profile Workspace 的 `data/persona` 下。资源正文、邮件、网站 checkout、
+个人资料值和 Cookie/token/密码继续由资源 owner 或用户选择的安全存储持有。
+Persona 仅保存资源引用、scope、policy 和观察信息，不将它们复制进 Git、Package、Plugin cache
+或 App durable state。个人资料值统一归用户维护的 Obsidian，详见
+[个人资料与表格](personal-profile-form-fill.md)。
 
-Capability ID 是稳定语义，不绑定文件路径、网站框架、邮箱客户端或 UI 页面。若
-`gflab_web` 将来更换生成器或托管平台，只要 adapter 继续满足
-`publishing.site.v1`，Persona Recipe 无需变化。
+Provider 的 fresh probe 决定当前可达性、支持操作和授权范围；保存的健康观察不能成为永久事实。
+当前目录 probe 只证明目录可达，不证明 note 写权限、资料质量或端到端工作流。
+未探测或无法验证时保留 unknown，不从 installed/enabled 状态猜测资源健康。
 
-### 当前 Provider ID 与通用 Capability 的迁移边界
+## Recipe
 
-通用 Capability ID 是长期语义合同；当前 Provider ID 和 action ref 仍是 active exports
-及 callable refs，不能被 App 或 Persona 静默改写、删除或写成已退役：
+Recipe 声明角色需要或偏好的 Capability、Binding 选择规则和审批策略。
+PI 当前以知识库作为核心资源；这不使 Obsidian 成为所有未来 Persona 的硬 runtime 依赖。
+邮件、网站、表格和专业门户保持可选，未使用这些资源的用户仍可使用其余能力。
 
-| 长期 Capability ID | 当前 Provider ID / action ref | 迁移含义 |
-| --- | --- | --- |
-| `knowledge.documents.v1` | `knowledge.obsidian.v1`、`knowledge.obsidian.v1#note.propose` | Obsidian 是首个 Provider；Recipe 与 Binding 使用通用 ID，resolver 返回 Provider 实际 action ref |
-| `publishing.site.v1` | `website.publication.v1` 与现有 `gflab_web` proposal type | `gflab_web` 是首个 Provider；网站 proposal schema 不因 Capability 泛化而强制改名 |
-| `communications.mail.v1` | 同名现有 Relay refs | 已是通用 ID，无需别名 |
-| `personal.inbox.v1` | 同名现有 Persona ref | 已是通用 ID，无需别名 |
+Recipe 不写死邮箱客户端、网站生成器、vault 路径或期刊站点。用户应能从可发现能力、已安装
+Provider、已配置 Binding 中选择组合，并可检查、修改、停用 Recipe。
+具体 Recipe registry 和 UI 只有在真实角色出现稳定复用需求后才实现。
 
-Capability ID、provider action ref 和 proposal artifact schema 是三类 identity：
+## 输入输出与 Inbox
 
-- Recipe 与 Resource Binding 只依赖通用 Capability ID；
-- Provider 声明自己实现的通用 Capability，并返回其可调用的 opaque action ref；
-- proposal schema 可以保留更具体的目标语义，例如 `knowledge.obsidian.note.v1`，不能被
-  当作另一个 Capability ID。
+能力可以提供输入，也可以接收已批准的输出。Inbox 是跨域 capture 的私有 staging：保存
+稳定 source refs、有界标题与摘要、状态及 route refs；完整邮件、网页、vault 文档和网站源码
+从其 owner 重新读取。Inbox 不升级为邮箱、知识库或外部任务系统。
 
-迁移按以下顺序进行，当前 Provider ID/action ref 在迁移完成前保持可调用：
+“已交给 owner”与“目标已写入”分开记录。报告交付完成前必须取得相应 owner 的成功回读；
+本地状态转换不能替代它。当前 Inbox 存储和状态枚举归 `inbox.py`，不另定义设计状态机。
 
-1. Provider 先声明通用 Capability，同时保留当前 Provider ID/action ref 的出口；
-2. 新 Recipe、Binding 与 App projection 在对应 consumer 已迁移时写通用 ID，执行时使用 Provider 返回的 ref；
-3. 只有 consumer-zero 与 installed/effective readback 均证明当前 Provider ID/action ref 已无调用者后，才可移除或降级该出口；
-4. 已发布 ID 永不改作其他语义。迁移期间不得让 App 维护第二份硬编码 ID 映射表。
+## 扩展条件
 
-第一版统一操作词汇只有：
+优先复用当前能力与 owner adapter：用户资源差异归 Binding，角色差异归 Recipe。
+只有独立发布、权限或真实跨 Package 复用证明需要时才新建 Package 或仓库，
+不为每个站点、表格或用户预建插件、CMS、浏览器框架或凭据系统。
 
-```text
-inspect / health
-read / search
-propose
-apply_approved
-readback
-```
-
-Provider 可以只实现其中一部分，但必须显式声明支持项，不能用“已安装”推断“可写”或
-“已发布”。所有外部 mutation 继续服从 `opl-persona-proposal.v1`；`apply_approved`
-只能执行用户批准的精确 proposal，随后必须 `readback`。
-
-## Provider Adapter 与 Resource Binding
-
-Provider Adapter 隔离具体工具和工作流。例如网站 adapter 可以使用 Git、Hugo、Netlify、
-站点 API 或浏览器，但 Persona 只依赖 `publishing.site.v1`。浏览器、Office 工具和邮件
-客户端是执行 surface，不是新的 domain authority。
-
-Resource Binding 把 Provider 连接到用户的真实资源。最小私有配置合同为：
-
-```yaml
-schema_version: opl-persona-resource-binding.v1
-binding_id: my-knowledge
-capability_id: knowledge.documents.v1
-provider_id: obsidian
-resource_ref: vault-ref://personal
-allowed_operations: [read, search, propose, apply_approved, readback]
-allowed_scopes: [notes/technical-memos]
-approval_policy_ref: persona-policy://knowledge-write-v1
-credential_ref: null
-enabled: true
-```
-
-`capability_id` 必须是通用 ID；`resource_ref` 与可选 `credential_ref` 必须是不含 secret
-和正文的 opaque reference。Binding 配置位于 `<profile>/data/persona` 的私有配置表面，不进入
-Git、Package、Plugin cache、App state 或公开日志。
-
-`health` 与 `currentness` 不是 Binding 文件中的持久事实。每次检查由 Provider fresh
-回读并产生独立结果：
-
-```yaml
-schema_version: opl-persona-binding-health.v1
-binding_id: my-knowledge
-checked_at: 2026-07-28T00:00:00Z
-status: healthy
-supported_operations: [read, search, propose, apply_approved, readback]
-authority_readback_ref: vault-readback://...
-issues: []
-```
-
-允许的状态是 `healthy`、`degraded`、`unavailable`、`unauthorized` 与 `unconfigured`。
-未执行 fresh health readback 时只能报告 `unknown`，不能从 Package installed/enabled
-状态推断 Binding 可用。
-
-Binding 只保存资源引用、scope 和策略。邮箱内容、Obsidian 内容、个人资料值、网站源码、
-Cookie、token 和密码仍由各自 authority 或用户选择的安全位置管理。当前个人资料设计中，
-包括身份、证件、金融、税务和收款字段在内的用户资料值统一由用户维护的 Obsidian
-资料库管理；Persona Binding 只保存可审计引用，不建立第二套值库。
-
-典型 Binding：
-
-```text
-my-knowledge       -> knowledge.documents.v1 / Obsidian / personal vault
-my-profile         -> personal.profile.v1 / Obsidian / profile notes
-sysu-mail          -> communications.mail.v1 / OPL Relay / SYSU account
-gflab-site         -> publishing.site.v1 / gflab_web / laboratory site
-editorial-manager  -> external.portal.v1 / browser adapter / journal account
-```
-
-同一 Provider 可以创建多个 Binding；停用一个 Binding 不应卸载 Provider，也不应影响其他
-资源。删除 Package、删除 Binding、撤销凭据和删除外部数据是四种不同动作。
-
-## Persona Recipe / Profile
-
-Recipe 是面向角色和工作流的能力组合，不是复制代码的新 Package：
-
-```text
-PI recipe
-  knowledge.documents.v1  required/recommended
-  personal.profile.v1     recommended
-  communications.mail.v1  optional
-  publishing.site.v1      optional
-  forms.fill.v1            optional
-  external.portal.v1      optional
-```
-
-知识库是当前 PI Persona 的核心 Binding，因为它保存长期知识、技术备忘录和用户维护的
-个人资料；但它不是所有未来 Persona 的硬 runtime 依赖。邮件、网站和专业门户必须保持
-可选：不使用这些服务的用户仍可使用 Persona 的知识与判断能力。
-
-Recipe 只能声明需要或偏好的 Capability、选择 Binding 的规则和审批策略，不能写死
-`gflab_web`、Apple Mail、Obsidian 路径或某个期刊站点。用户可以从 App 或 Codex 对话中
-查看“可用 Capability → 已安装 Provider → 已配置 Binding → 可启用 Recipe”，再自由组合。
-
-## 输入、输出与通用 Inbox
-
-每个 Capability 可以是输入、输出或双向：
-
-- 邮件既提供证据，也接收经批准的草稿与发送动作；
-- 知识库既为写作和判断提供输入，也接收技术备忘录、论文摘要和个人资料更新；
-- 网站既提供当前公开状态，也接收新闻、论文和列表更新 proposal；
-- 专业门户既提供编辑/审稿任务，也接收经批准的表单和决定；
-- `personal.inbox.v1` 接收论文、网页、邮件、任职、想法等 capture，再路由到知识、行动、
-  通信或发布 proposal。
-
-通用 Inbox 是 staging 与 triage surface，不是长期知识库或第二邮箱。条目只有在目标
-authority 实际写入并回读后，才可标记为已迁移；保留 source reference，避免丢失来源。
-
-最小私有条目合同为：
-
-```yaml
-schema_version: opl-persona-inbox-item.v1
-item_id: inbox-...
-captured_at: 2026-07-28T00:00:00Z
-source_refs: [email-store://..., https://...]
-source_kind: mail
-summary: bounded derived summary
-status: captured
-routes: []
-```
-
-Inbox 只持久化稳定 `source_refs`、有界摘要、状态和路由记录，不复制邮件正文、网页归档、
-Obsidian 文档或网站 checkout。需要完整内容时由对应 authority 重新读取。建议状态机为：
-
-```text
-captured -> triaged -> proposal_ready -> routed -> resolved
-                    \-> dismissed
-```
-
-每个 route 至少记录目标 `capability_id`、`binding_id`、proposal ref、owner action ref
-和 authority receipt/readback ref。`routed` 只表示已交给 owner；只有目标 authority
-回读成功后才进入 `resolved`。原始邮件即使被 capture，仍由 Relay 邮箱存储拥有，不会
-迁入 Persona Inbox。
-
-## 发现、组合与状态
-
-发现应按以下顺序呈现，而不是把“安装插件”当成全部状态：
-
-```text
-discover Package
-  -> enumerate Capability declarations
-  -> inspect Provider implementation and supported operations
-  -> configure/authorize Resource Binding
-  -> select Persona Recipe
-  -> health check and currentness readback
-```
-
-建议的用户可见状态是：`available`、`installed`、`configured`、`healthy`、`degraded`、
-`approval_required`。状态必须来自 Provider 和 authority 的 fresh readback；Package
-descriptor、测试 fixture 或本地候选不能证明真实资源已可用。
-
-## 模块扩展规则
-
-新增模块时依次判断：
-
-1. 是否已有 Capability Contract 可以复用；
-2. 能否只新增 Provider Adapter，而不新增 Core 或 Repo；
-3. 用户差异是否只需要一个 Resource Binding；
-4. 角色差异是否只需要调整 Recipe；
-5. 只有出现独立发布、权限、团队 ownership 或真实跨 Package 复用需求时，才新建 Package
-   或 Repo。
-
-不要为每个网站、期刊、表格或用户创建插件，也不要先造通用 CMS、浏览器框架、凭据系统
-或大型插件总线。第一条真实闭环应优先复用现有 Relay、Obsidian、`gflab_web`、Office 与
-浏览器能力，证明 contract 后再抽象。
-
-## 分阶段落地
-
-1. **合同固化**：以本文档为设计 SSOT，后续在 Package descriptor 中逐步增加通用
-   Capability 声明并保留当前 Provider ID/action ref 的可发现性，不改变现有 proposal 安全边界。
-2. **三源闭环**：以 Obsidian、Relay、`gflab_web` 验证一次“论文 → 知识库 + 网站 + 邮件”
-   的 proposal/readback 链路。
-3. **Binding 管理**：carrier-neutral Package discovery/status/action projection 已可用；
-   下一步由 Provider 提供 Binding health/readback，OPL App 只呈现其结果。
-4. **专业输出扩展**：按真实频率加入表格和外部专业门户 adapter，不预制低频站点。
-5. **Recipe 组合**：形成 PI、学术编辑、审稿专家等 Recipe；Recipe 始终可检查、可调整、
-   可停用。
-
-完成标准不是“架构图已存在”或“Package 已安装”，而是选定 Binding 上的真实输入、精确
-proposal、用户批准、owner adapter 执行及 authority readback 能够完整闭环。
+先用选定资源证明真实输入、proposal、批准、owner 执行与回读，再抽取稳定共性。
+表格与门户的独立设计分别归其主题文档；安装、架构图和本地测试不代表这些目标已完成。

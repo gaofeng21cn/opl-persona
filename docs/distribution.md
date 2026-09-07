@@ -29,7 +29,7 @@ GHCR payload、原生 carrier installed bytes、Framework projection 与 OPL App
 
 Obsidian 知识库和网站仓库继续保留在用户选定的外部位置。Persona 只保存受控资源绑定
 （Resource Binding）、来源证据和提案状态，不复制知识库、网站检出目录、邮件正文、账户凭据
-或审批内容。
+或外部系统的审批正文；Persona 自己的 proposal 与批准记录仍归其私有数据目录。
 
 ## 当前可用分发
 
@@ -99,7 +99,7 @@ projection 只能聚合这些结果，不能从本仓文档、源码 tag 或 des
 
 本仓负责以下准备：
 
-- 版本化源代码、双语用户入口、MIT 许可证和品牌资产；
+- 版本化源代码、双语用户入口、Apache License 2.0 和品牌资产；
 - 可从本地或 Git 插件市场安装的 Codex 插件载体；
 - 单元测试、插件校验与 GitHub 持续集成；
 - 明确的分身工作空间数据边界。
