@@ -1,0 +1,44 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "opl-persona",
+  "version": "0.2.3",
+  "description": "Evidence-backed PI context and reviewable output proposals for OPL.",
+  "author": {
+    "name": "OPL"
+  },
+  "repository": "https://github.com/gaofeng21cn/opl-persona",
+  "license": "Apache-2.0",
+  "keywords": [
+    "persona",
+    "memory",
+    "knowledge",
+    "mail",
+    "website"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "OPL Persona",
+        "shortDescription": "Evidence-backed PI context for Codex and OPL.",
+        "longDescription": "Coordinate approved personal context across OPL Relay, Obsidian, and the lab website without owning any private source data.",
+        "developerName": "OPL",
+        "category": "Productivity",
+        "capabilities": [
+          "PI context",
+          "Evidence-backed proposals",
+          "Knowledge-to-website output",
+          "Knowledge-to-mail output"
+        ],
+        "websiteURL": "https://github.com/gaofeng21cn/opl-persona",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/icon.png",
+        "defaultPrompt": [
+          "根据一篇论文生成知识库更新和实验室网站更新提案。",
+          "把这篇 Obsidian 技术备忘录整理成网站文章和邮件草稿上下文。",
+          "初始化我的 Profile Workspace，检查资源绑定和待审核的 Persona 输出提案。"
+        ],
+        "brandColor": "#BE304A"
+      }
+    }
+  }
+}

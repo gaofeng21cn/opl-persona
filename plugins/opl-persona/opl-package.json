@@ -34,9 +34,10 @@
     "canonicalization": "ordered_path_length_file_length_bytes",
     "paths": [
       ".codex-plugin/plugin.json",
-      "assets/icon.png",
-      "bin/opl-persona",
-      "runtime/opl_persona/__init__.py",
+    "assets/icon.png",
+    "bin/opl-persona",
+    "plugin.json",
+    "runtime/opl_persona/__init__.py",
       "runtime/opl_persona/approvals.py",
       "runtime/opl_persona/__main__.py",
       "runtime/opl_persona/app_contributions.py",
@@ -51,7 +52,7 @@
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:78115f8b5325d6a847a10fbf4f33fb4af1d5268629a2910aa9882367367f008d"
+    "digest": "sha256:fd8ae265ab805c9cafca0ea9d1204c85ac86b37d2376191f64af405388094c6a"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
