@@ -27,3 +27,5 @@ Codex Plugin 与 OPL Package 描述。
 - 历史默认由 Git 保存；只有仍影响当前决定的理由、安全约束或有效目标才保留，明确其身份。
   新增文档须有现有主题不能承担的独立责任。链接、资源、结构检查可以自动化，语义不可用
   关键词、标题或文本快照裁决。
+
+- GitHub 上自己新建的对外文本用英文书写：commit subject/body、PR 标题与正文、Issue、comment、Release 正文与 Release Notes。产品名、代码标识、路径、命令与原始引用除外。他人写的 Issue、PR 或 comment，无论对方用什么语言，回复沿用对方的语言；历史中已有的非英文 commit 保持原样。
