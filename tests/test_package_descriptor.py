@@ -57,6 +57,15 @@ def test_package_identity_capabilities_and_plugin_version_are_aligned() -> None:
     assert package["exports"]["optional_skill_policy_ref"] == "opl-package.json#/exports"
     assert package["codex_surface"]["plugin_id"] == plugin["name"] == "opl-persona"
     assert package["codex_surface"]["plugin_source_path"] == "."
+    # One Package keeps one publication channel. The descriptor has to declare the OCI
+    # repository it publishes to, or Framework projection and App readback show no channel.
+    assert package["codex_surface"]["configured_codex_plugin_carrier"] == {
+        "kind": "codex_plugin_manager",
+        "plugin_selector": "opl-persona@opl-persona",
+        "executor_route": "codex_cli",
+        "marketplace_source": "gaofeng21cn/opl-persona",
+        "publication_ref": "ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable",
+    }
 
     assert SKILL_PATH.is_file()
     assert ENTRYPOINT_PATH.is_file()

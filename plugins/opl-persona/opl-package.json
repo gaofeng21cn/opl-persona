@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "source": "first_party",
   "package_role": "capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -34,10 +34,10 @@
     "canonicalization": "ordered_path_length_file_length_bytes",
     "paths": [
       ".codex-plugin/plugin.json",
-    "assets/icon.png",
-    "bin/opl-persona",
-    "plugin.json",
-    "runtime/opl_persona/__init__.py",
+      "assets/icon.png",
+      "bin/opl-persona",
+      "plugin.json",
+      "runtime/opl_persona/__init__.py",
       "runtime/opl_persona/approvals.py",
       "runtime/opl_persona/__main__.py",
       "runtime/opl_persona/app_contributions.py",
@@ -52,12 +52,19 @@
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:fd8ae265ab805c9cafca0ea9d1204c85ac86b37d2376191f64af405388094c6a"
+    "digest": "sha256:8c959b51fe6da761fb77c5166a008e61c544e1f141debe816d4ebd791e268b79"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
     "plugin_source_path": ".",
     "codex_default_exposure": false,
+    "configured_codex_plugin_carrier": {
+      "kind": "codex_plugin_manager",
+      "plugin_selector": "opl-persona@opl-persona",
+      "executor_route": "codex_cli",
+      "marketplace_source": "gaofeng21cn/opl-persona",
+      "publication_ref": "ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona:latest-stable"
+    },
     "optional_install_policy": "all_exported_skills",
     "app_contribution_abi": {
       "schema_version": "opl-package-app-contribution-cli.v1",

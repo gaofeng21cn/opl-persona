@@ -44,7 +44,8 @@ Obsidian 知识库和网站仓库继续保留在用户选定的外部位置。Pe
 目录位于 Codex 已取得的快照中，因此不要求用户手工维护插件缓存。
 
 本地检出目录和 Git 插件市场统一使用正式标识 `opl-persona`。这个标识只代表 Codex 插件市场，
-不等同于未来 OPL 托管能力包的远端通道。
+等同于 descriptor 声明的 `codex_surface.configured_codex_plugin_carrier.plugin_selector`；
+它不等同于 OPL 托管能力包的远端通道，后者只由同一 carrier 块的 `publication_ref` 声明。
 
 使用 Git 插件市场时，刷新快照和重新安装插件的命令是：
 
@@ -64,8 +65,9 @@ codex plugin add opl-persona@opl-persona --json
 ## OPL 托管通道
 
 Persona owner 通过 `plugins/opl-persona/opl-package.json` 声明 Package identity、
-capability、dependency intent、App contribution 与 content lock，并独立发布不可变
-GHCR payload。安装与 publication 是两个 authority 面：
+capability、dependency intent、App contribution 与 content lock，并在
+`codex_surface.configured_codex_plugin_carrier` 里声明 Codex 插件市场来源与唯一
+publication 通道，再独立发布不可变 GHCR payload。安装与 publication 是两个 authority 面：
 
 ```text
 Persona owner descriptor + immutable GHCR publication
