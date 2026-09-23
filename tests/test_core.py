@@ -12,7 +12,7 @@ from opl_persona.core import (
 )
 from opl_persona.policy import load_markdown_policies
 
-from relay_v2 import relay_v2_evidence
+from relay_v2 import mail_assessment, relay_v2_evidence
 
 
 def sha256(value: str) -> str:
@@ -108,6 +108,7 @@ def test_mail_triage_captures_personal_inbox_and_policy_bound_decision(
     result = build_mail_triage_proposals(
         {
             "relay_evidence": evidence,
+            "assessment": mail_assessment(evidence),
         }
     )
 
@@ -151,7 +152,10 @@ def test_mail_triage_resolves_first_author_routing_from_profile_context(
         cc=cc,
     )
 
-    triage = build_mail_triage_proposals({"relay_evidence": evidence})["proposals"][1]
+    triage = build_mail_triage_proposals({
+        "relay_evidence": evidence,
+        "assessment": mail_assessment(evidence, recommended_action=expected_action),
+    })["proposals"][1]
 
     assert triage["manuscript_alias"] == "Spectrum00815-26R1"
     assert triage["context_digest"].startswith("sha256:")
@@ -197,12 +201,12 @@ def test_mail_triage_fails_closed_for_invalid_relay_v2_bridge(
     evidence = relay_v2_evidence()
     mutate(evidence)
     with pytest.raises(ValueError, match=message):
-        build_mail_triage_proposals({"relay_evidence": evidence})
+        build_mail_triage_proposals({"relay_evidence": evidence, "assessment": mail_assessment(evidence)})
 
 
 def test_mail_triage_rejects_scattered_headers_and_external_digest(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path)))
-    with pytest.raises(ValueError, match="relay_evidence bridge input"):
+    with pytest.raises(ValueError, match="relay_evidence and assessment inputs"):
         build_mail_triage_proposals(
             {
                 "email_ref": "email-store://sysu/INBOX/123/0123456789abcdef",
@@ -214,7 +218,33 @@ def test_mail_triage_rejects_scattered_headers_and_external_digest(monkeypatch, 
 def test_mail_triage_fails_closed_without_persona_markdown(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "empty-profile"))
     with pytest.raises(FileNotFoundError, match="no Markdown policies"):
-        build_mail_triage_proposals({"relay_evidence": relay_v2_evidence()})
+        evidence = relay_v2_evidence()
+        build_mail_triage_proposals({"relay_evidence": evidence, "assessment": mail_assessment(evidence)})
+
+
+def test_mail_triage_uses_evidence_bound_assessment_not_subject_keywords(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path)))
+    evidence = relay_v2_evidence(subject="Newsletter about a manuscript deadline")
+    assessment = mail_assessment(
+        evidence,
+        classification="needs_user_reply",
+        priority="highest",
+        rationale="The message asks the owner to decide on a manuscript deadline.",
+    )
+    triage = build_mail_triage_proposals({
+        "relay_evidence": evidence, "assessment": assessment,
+    })["proposals"][1]
+    assert triage["payload"]["classification"] == "needs_user_reply"
+    assert triage["payload"]["priority"] == "highest"
+    assert triage["payload"]["rationale"] == assessment["rationale"]
+
+
+def test_mail_triage_rejects_assessment_for_another_message(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path)))
+    evidence = relay_v2_evidence()
+    assessment = mail_assessment(evidence, email_ref="email-store://sysu/INBOX/456/0123456789abcdef")
+    with pytest.raises(ValueError, match="assessment.email_ref"):
+        build_mail_triage_proposals({"relay_evidence": evidence, "assessment": assessment})
 
 
 def test_generic_inbox_capture_is_evidence_backed_and_review_gated() -> None:

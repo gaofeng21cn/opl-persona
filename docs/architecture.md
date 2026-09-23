@@ -38,6 +38,11 @@ communications.mail.v1
 website.publication.v1
 ```
 
+These are package-scoped capability surfaces, not ownership claims over mail,
+Obsidian content, or the website. An App action is addressed by both
+`package_id` and its action ref. Relay retains mail authority even when Persona
+exposes a mail triage proposal action.
+
 The CLI implements proposal builders for publication, memo, mail triage, Inbox
 capture, and Obsidian notes. Its current proposal routes are:
 
@@ -79,8 +84,9 @@ change, sent email, or written vault note.
 
 ## Inbox and Obsidian proposal contracts
 
-`mail.triage` consumes one validated Relay facts envelope and Persona's private
-policy/context snapshots. It produces a reviewable decision and a refs-only
+`mail.triage` consumes one validated Relay facts envelope, an agent assessment
+bound to the same email reference, and Persona's private policy/context
+snapshots. It validates the decision and produces a reviewable proposal and a refs-only
 Inbox capture; missing evidence fails closed. Policy loading, content digests
 and recipient interpretation belong to [Mail Policy](mail-policy.md).
 Persona never treats the Relay refs-set digest as its own policy-content

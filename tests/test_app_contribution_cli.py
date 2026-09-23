@@ -16,7 +16,7 @@ from opl_persona.cli import main
 from opl_persona.inbox import InboxStore
 from opl_persona.paths import PersonaPaths
 
-from relay_v2 import relay_v2_evidence
+from relay_v2 import mail_assessment, relay_v2_evidence
 
 
 ROOT = Path(__file__).parents[1]
@@ -191,6 +191,7 @@ def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsy
             "communications.mail.v1#triage.propose",
             {
                 "relay_evidence": relay_v2_evidence(),
+                "assessment": mail_assessment(relay_v2_evidence()),
             },
             ["personal.inbox.v1.capture", "mail.triage"],
         ),
@@ -262,6 +263,7 @@ def test_mail_triage_app_action_accepts_only_relay_v2_evidence(
             "ref": "communications.mail.v1#triage.propose",
             "input": {
                 "relay_evidence": relay_v2_evidence(),
+                "assessment": mail_assessment(relay_v2_evidence()),
             },
         },
     )

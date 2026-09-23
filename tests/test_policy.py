@@ -3,7 +3,7 @@ from pathlib import Path
 from opl_persona.core import build_mail_triage_proposals
 from opl_persona.policy import DEFAULT_POLICY_REF, load_markdown_policies
 
-from relay_v2 import relay_v2_evidence
+from relay_v2 import mail_assessment, relay_v2_evidence
 
 def test_markdown_policy_snapshot_hashes_content_and_exposes_stable_ref(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
@@ -37,6 +37,7 @@ def test_mail_triage_reloads_selector_workspace_policy(monkeypatch, tmp_path: Pa
     result = build_mail_triage_proposals(
         {
             "relay_evidence": evidence,
+            "assessment": mail_assessment(evidence),
         }
     )
 
@@ -59,6 +60,7 @@ def test_relay_refs_digest_is_not_reused_as_persona_content_digest(monkeypatch, 
     result = build_mail_triage_proposals(
         {
             "relay_evidence": evidence,
+            "assessment": mail_assessment(evidence),
         }
     )
     triage = result["proposals"][1]

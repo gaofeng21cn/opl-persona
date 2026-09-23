@@ -41,13 +41,18 @@ provenance metadata.
 
 ## Triage evidence
 
-The triage input is exactly one `relay_evidence` object. Persona validates its
+The triage input contains exactly one `relay_evidence` object and one
+evidence-bound `assessment` object supplied by the calling agent. Persona validates the envelope's
 canonical `email-store://` identity, nested `mail.headers`, parsed recipient
 facts, raw-message hashes, freshness, Relay policy ref digest, and write
 boundary before using it. Persona then loads its own mail identity and
 manuscript/roster context from `<profile>/profile/*.md` and
 `<profile>/context/*.md`, records a separate content digest, and returns
-normalized `to`, `cc`, and `bcc` facts plus conservative routing fields. When
+normalized `to`, `cc`, and `bcc` facts plus conservative routing fields. It
+validates the assessment's classification, priority, rationale, uncertainty,
+recommended action, and exact email reference. The calling agent reads the
+private policy and correspondence before judging meaning; no keyword rule in
+the Python engine silently classifies a message. When
 actual-first-author or team evidence is not available, those fields remain
 uncertain rather than being invented:
 
@@ -55,8 +60,8 @@ uncertain rather than being invented:
   propose forwarding to that first author;
 - the first author is already a recipient: notify the user and identify the
   current follow-up owner;
-- advertising and mass marketing remain cleanup candidates, but no mailbox
-  mutation is executed by Persona.
+- advertising and mass marketing may be proposed for cleanup after contextual
+  judgment, but no mailbox mutation is executed by Persona.
 
 All proposals retain `source_refs` and
 `approval.external_write_allowed: false`. Relay or another domain owner must

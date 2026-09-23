@@ -58,6 +58,7 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
         "confirmation_required": False,
         "input": {
             "relay_evidence": {"type": "object", "required": True},
+            "assessment": {"type": "object", "required": True},
         },
         "result": "communications.mail.v1#triage.propose.result",
     },

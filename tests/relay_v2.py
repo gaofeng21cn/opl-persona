@@ -76,3 +76,16 @@ def relay_v2_evidence(
         },
         "provider_write": {"status": "unreachable"},
     }
+
+
+def mail_assessment(evidence: dict[str, Any], **overrides: str) -> dict[str, str]:
+    result = {
+        "email_ref": evidence["source_refs"][0],
+        "classification": "needs_user_reply",
+        "priority": "high",
+        "rationale": "The journal requests a response from the owner.",
+        "uncertainty": "The response deadline needs confirmation.",
+        "recommended_action": "review_and_decide",
+    }
+    result.update(overrides)
+    return result

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "opl-persona",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Evidence-backed PI context and reviewable output proposals for OPL.",
   "author": {
     "name": "OPL"

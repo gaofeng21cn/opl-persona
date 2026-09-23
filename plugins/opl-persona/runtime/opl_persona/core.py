@@ -11,7 +11,6 @@ from typing import Any, Mapping
 from .paths import PersonaPaths
 from .policy import (
     MailContextSnapshot,
-    PolicySnapshot,
     load_mail_context,
     load_markdown_policies,
     resolve_manuscript_context,
@@ -97,8 +96,8 @@ def _hex_digest(value: object, name: str) -> str:
 def _relay_v2_evidence(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Verify Relay's facts-only envelope before Persona interprets it."""
 
-    if set(payload) != {"relay_evidence"}:
-        raise ValueError("mail triage accepts only a relay_evidence bridge input")
+    if set(payload) != {"relay_evidence", "assessment"}:
+        raise ValueError("mail triage requires relay_evidence and assessment inputs")
     evidence = payload.get("relay_evidence")
     if not isinstance(evidence, Mapping):
         raise ValueError("relay_evidence must be an object")
@@ -224,11 +223,11 @@ def _relay_v2_evidence(payload: Mapping[str, Any]) -> dict[str, Any]:
 _MAX_TRIAGE_SUMMARY = 4096
 
 
-def _policy_provenance() -> tuple[list[str], str, PolicySnapshot]:
+def _policy_provenance() -> tuple[list[str], str]:
     """Load every Markdown rule from the one Profile Workspace or fail closed."""
 
     snapshot = load_markdown_policies(workspace=PersonaPaths.resolve().workspace)
-    return list(snapshot.refs), snapshot.digest, snapshot
+    return list(snapshot.refs), snapshot.digest
 
 
 def _mail_context_provenance() -> MailContextSnapshot:
@@ -410,91 +409,30 @@ def _recipient_analysis(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _policy_classification(
-    payload: Mapping[str, Any],
-    *,
-    routing: Mapping[str, Any],
-    policy: PolicySnapshot | None,
-) -> dict[str, str]:
-    """Derive conservative defaults from evidence and private Markdown text."""
-
-    text = " ".join(
-        str(payload.get(key) or "")
-        for key in ("subject", "summary", "snippet", "body", "from", "sender")
-    ).casefold()
-    policy_text = policy.text.casefold() if policy else ""
-    advertising = any(
-        token in text
-        for token in (
-            "unsubscribe",
-            "newsletter",
-            "promotion",
-            "promotional",
-            "marketing",
-            "webinar",
-            "conference registration",
-            "special issue invitation",
-            "广告",
-            "推广",
-            "营销",
-        )
-    ) and not any(token in text for token in ("manuscript", "submission", "revision", "proof"))
-    manuscript = any(
-        token in text
-        for token in (
-            "manuscript",
-            "submission",
-            "editorial",
-            "reviewer",
-            "revision",
-            "proof",
-            "投稿",
-            "论文",
-            "杂志社",
-            "编辑",
-        )
-    )
-    if routing.get("forward_to"):
-        return {
-            "classification": "needs_user_reply",
-            "priority": "highest" if manuscript else "high",
-            "rationale": "唯一收件人是本人，实际第一作者为已匹配的团队成员，建议转发并由其跟进。",
-            "recommended_action": "forward_to_first_author",
-        }
-    if routing.get("notification", {}).get("required"):
-        return {
-            "classification": "remind",
-            "priority": "highest" if manuscript else "high",
-            "rationale": "邮件已发给实际第一作者，需通知本人并注明当前跟进人。",
-            "recommended_action": "notify_user_with_follow_up",
-        }
-    if advertising:
-        return {
-            "classification": "archive_candidate",
-            "priority": "low",
-            "rationale": "符合私有规则中的高置信广告或营销信号。",
-            "recommended_action": "delete",
-        }
-    if manuscript:
-        return {
-            "classification": "needs_user_reply",
-            "priority": "high",
-            "rationale": "投稿、论文或编辑事务属于第一优先级，需要保留人工判断。",
-            "recommended_action": "review_and_decide",
-        }
-    if "mailbox-triage" in policy_text or "triage" in policy_text:
-        return {
-            "classification": "fyi",
-            "priority": "normal",
-            "rationale": "未命中更高优先级规则，保留为低风险知会。",
-            "recommended_action": "observe",
-        }
-    return {
-        "classification": "needs_more_context",
-        "priority": "normal",
-        "rationale": "现有邮件证据不足以应用明确的私有规则。",
-        "recommended_action": "read_with_more_context",
+def _validated_assessment(value: object, *, email_ref: str) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        raise ValueError("assessment must be an object")
+    fields = {
+        "email_ref", "classification", "priority", "rationale", "uncertainty", "recommended_action",
     }
+    if set(value) != fields:
+        raise ValueError("assessment must contain exactly: " + ", ".join(sorted(fields)))
+    assessment = {}
+    for field in fields:
+        item = value[field]
+        if not isinstance(item, str) or not item.strip() or len(item) > 4096:
+            raise ValueError(f"assessment.{field} must be a non-empty bounded string")
+        assessment[field] = item.strip()
+    if assessment["email_ref"] != email_ref:
+        raise ValueError("assessment.email_ref must match Relay evidence")
+    if assessment["classification"] not in {
+        "remind", "needs_user_reply", "draft_candidate", "archive_candidate",
+        "trash_candidate", "fyi", "needs_more_context",
+    }:
+        raise ValueError("assessment.classification is unsupported")
+    if assessment["priority"] not in {"highest", "high", "normal", "low"}:
+        raise ValueError("assessment.priority is unsupported")
+    return assessment
 
 
 def _inbox_capture(
@@ -661,7 +599,7 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
     relay = _relay_v2_evidence(payload)
     email_ref = relay["email_ref"]
     source_refs = relay["source_refs"]
-    policy_refs, policy_digest, policy_snapshot = _policy_provenance()
+    policy_refs, policy_digest = _policy_provenance()
     subject = relay["subject"]
     summary = relay["summary"]
     mail_context = _mail_context_provenance()
@@ -674,26 +612,21 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
     relay["team_members"] = [dict(item) for item in mail_context.team_members]
     relay.update(manuscript_context)
     routing = _recipient_analysis(relay)
-    derived = _policy_classification(relay, routing=routing, policy=policy_snapshot)
-    classification = derived["classification"]
-    priority = derived["priority"]
-    rationale = derived["rationale"]
-    default_uncertainty = "未发现额外不确定性。"
+    assessment = _validated_assessment(payload["assessment"], email_ref=email_ref)
+    uncertainty = assessment["uncertainty"]
     if not routing["recipient_identity_known"] and (
         routing["to"] or routing["cc"] or routing["bcc"]
     ):
-        default_uncertainty = "缺少用户自身邮箱 identity，无法确认是否为唯一收件人。"
+        uncertainty += " 缺少用户自身邮箱 identity，无法确认是否为唯一收件人。"
     elif routing.get("actual_first_author") and not routing["team_member_match"]["matched"]:
-        default_uncertainty = "实际第一作者或团队成员匹配信息不完整。"
-    uncertainty = default_uncertainty
-    recommended_action = derived["recommended_action"]
+        uncertainty += " 实际第一作者或团队成员匹配信息不完整。"
     triage_payload = {
         "email_ref": email_ref,
-        "classification": _required({"value": classification}, "value"),
-        "priority": _required({"value": priority}, "value"),
-        "rationale": _required({"value": rationale}, "value"),
-        "uncertainty": _required({"value": uncertainty}, "value"),
-        "recommended_action": _required({"value": recommended_action}, "value"),
+        "classification": assessment["classification"],
+        "priority": assessment["priority"],
+        "rationale": assessment["rationale"],
+        "uncertainty": uncertainty,
+        "recommended_action": assessment["recommended_action"],
     }
     triage_payload.update(routing)
     triage = _proposal(
