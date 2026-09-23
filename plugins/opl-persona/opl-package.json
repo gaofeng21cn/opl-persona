@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "source": "first_party",
   "package_role": "capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -12,6 +12,11 @@
     "id": "opl-persona.capabilities",
     "version": "1.0.0",
     "compatibility_policy": "same_major"
+  },
+  "connect_skill_sync_policy": {
+    "default_scope": "codex",
+    "allowed_scopes": ["codex"],
+    "implicit_without_target": "require_target"
   },
   "exports": {
     "core_skill_ids": [
@@ -52,7 +57,7 @@
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:026be63b61308fc2e3738314b804eee704f369c19d62117fd1565d5ecd6ccc6b"
+    "digest": "sha256:bb394bc37a8261c5bb0bdb083f24c0347fa60d352d9dc920288d12f17d23414f"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

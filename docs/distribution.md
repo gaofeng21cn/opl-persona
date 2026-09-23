@@ -68,6 +68,7 @@ Persona owner 通过 `plugins/opl-persona/opl-package.json` 声明 Package ident
 capability、dependency intent、App contribution 与 content lock，并在
 `codex_surface.configured_codex_plugin_carrier` 里声明 Codex 插件市场来源与唯一
 publication 通道，再独立发布不可变 GHCR payload。安装与 publication 是两个 authority 面：
+Skill 同步策略只允许 Codex 作用域；不会隐式复制到工作空间或单项任务目录。
 
 ```text
 Persona owner descriptor + immutable GHCR publication
