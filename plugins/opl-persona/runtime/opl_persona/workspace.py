@@ -133,16 +133,21 @@ def relay_read(ref: str, value: dict[str, Any], paths: PersonaPaths) -> dict[str
         if result.returncode:
             raise ValueError("Relay public read failed")
         envelope = json.loads(result.stdout)
-        if not isinstance(envelope, dict) or envelope.get("ok") is False:
-            raise ValueError("Relay public read returned an invalid envelope")
-        # Framework may wrap the package response once; identity is still checked.
-        if envelope.get("ref") not in {None, ref}:
-            raise ValueError("Relay public read ref mismatch")
-        payload = envelope.get("result", envelope)
-        if isinstance(payload, dict) and payload.get("schema_version") == "opl-package-app-contribution-response.v1":
-            if payload.get("ok") is not True or payload.get("ref") != ref:
-                raise ValueError("Relay public read identity mismatch")
-            payload = payload.get("result")
+        contribution = envelope.get("opl_app_contribution") if isinstance(envelope, dict) else None
+        if (not isinstance(contribution, dict)
+                or contribution.get("surface_kind") != "opl_app_package_contribution.v1"
+                or contribution.get("package_id") != "opl-relay"
+                or contribution.get("ref") != ref
+                or contribution.get("operation") != "read"):
+            raise ValueError("Relay public read returned an invalid Framework identity")
+        response = contribution.get("response")
+        if (not isinstance(response, dict)
+                or response.get("schema_version") != "opl-package-app-contribution-response.v1"
+                or response.get("ok") is not True
+                or response.get("ref") != ref
+                or response.get("operation") != "read"):
+            raise ValueError("Relay public read returned an invalid package identity")
+        payload = response.get("result")
         if not isinstance(payload, dict) or payload.get("kind") != "data" or payload.get("state") != "ready":
             raise ValueError("Relay memory read is not ready")
         data = payload.get("data")

@@ -28,6 +28,16 @@ def memory_input(identifier="memory:demo"):
             "source_refs": ["obsidian://people/demo.md", "website://lab/research"], "expected_digest": "absent"}
 
 
+def framework_relay_response(ref):
+    return {"opl_app_contribution": {
+        "surface_kind": "opl_app_package_contribution.v1", "package_id": "opl-relay",
+        "ref": ref, "operation": "read", "confirmation_required": False,
+        "response": {"schema_version": "opl-package-app-contribution-response.v1", "ok": True,
+            "ref": ref, "operation": "read", "result": {
+                "kind": "data", "state": "ready", "data": {"items": [{"id": "relay-person", "name": "Researcher",
+                    "source_refs": ["email-store://demo/source"], "summary": "Prior correspondence"}]}}}}}
+
+
 def test_four_working_modes_and_persistent_selection(store):
     contexts = store.list("contexts")
     assert {item["mode"] for item in contexts} == set(CONTEXT_MODES)
@@ -92,23 +102,74 @@ def test_missing_provenance_and_unknown_relationship_fail_closed(store):
     assert not store.path.exists()
 
 
-def test_relay_uses_exact_public_read_abi_and_never_copies_state(store, monkeypatch):
+@pytest.mark.parametrize("collection", ["people", "search"])
+def test_relay_uses_exact_public_read_abi_and_never_copies_state(store, monkeypatch, collection):
+    ref = f"personal.memory.v1#{collection}"
     captured = []
     def read(argv, **kwargs):
         captured.append((argv, kwargs))
-        return subprocess.CompletedProcess(argv, 0, json.dumps({"ok": True, "ref": "personal.memory.v1#people", "result": {
-            "kind": "data", "state": "ready", "data": {"items": [{"id": "relay-person", "name": "Researcher",
-                "source_refs": ["email-store://demo/source"], "summary": "Prior correspondence"}]}}}), "")
+        return subprocess.CompletedProcess(argv, 0, json.dumps(framework_relay_response(ref)), "")
     monkeypatch.setattr(subprocess, "run", read)
-    evidence = store.relay("people")
-    assert evidence["state"] == "ready"
+    evidence = store.relay(collection, query="Researcher", entity="relay-person")
+    assert evidence == {"state": "ready", "package_id": "opl-relay", "ref": ref,
+                        "items": framework_relay_response(ref)["opl_app_contribution"]["response"]["result"]["data"]["items"]}
     argv, kwargs = captured[0]
     assert argv[:7] == ["opl", "app", "contribution", "read", "--package-id", "opl-relay", "--ref"]
-    assert json.loads(argv[argv.index("--input") + 1]) == {}
+    assert argv[7] == ref
+    expected_input = {"query": "Researcher"}
+    if collection == "search":
+        expected_input["entity"] = "relay-person"
+    assert json.loads(argv[argv.index("--input") + 1]) == expected_input
     assert kwargs["env"]["OPL_PROFILE_WORKSPACE"] == str(store.paths.workspace)
     assert not store.path.exists()
     with pytest.raises(ValueError):
         relay_read("communications.mail.v1#send", {}, store.paths)
+
+
+@pytest.mark.parametrize(("section", "field", "value"), [
+    ("outer", "surface_kind", "opl_app_package_contribution.v2"),
+    ("outer", "package_id", "opl-persona"),
+    ("outer", "ref", "personal.memory.v1#search"),
+    ("outer", "operation", "execute"),
+    ("outer", "response", None),
+    ("inner", "schema_version", "opl-package-app-contribution-response.v2"),
+    ("inner", "ok", False),
+    ("inner", "ok", 1),
+    ("inner", "ref", "personal.memory.v1#search"),
+    ("inner", "operation", "execute"),
+    ("inner", "result", None),
+    ("result", "kind", "action"),
+    ("result", "state", "unavailable"),
+    ("result", "data", None),
+    ("result", "data", {}),
+    ("result", "data", {"items": {}}),
+])
+def test_relay_framework_and_package_identity_must_match_before_reading_data(store, monkeypatch, section, field, value):
+    ref = "personal.memory.v1#people"
+    wire = framework_relay_response(ref)
+    outer = wire["opl_app_contribution"]
+    inner = outer["response"]
+    {"outer": outer, "inner": inner, "result": inner["result"]}[section][field] = value
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kwargs:
+                        subprocess.CompletedProcess(argv, 0, json.dumps(wire), "private diagnostics"))
+    assert relay_read(ref, {}, store.paths) == {
+        "state": "unavailable", "items": [], "package_id": "opl-relay", "ref": ref,
+        "reason": "Relay public memory ABI unavailable"}
+    assert not store.path.exists()
+
+
+@pytest.mark.parametrize("shape", ["data", "package", "root-result", "wrapped-framework", "missing-outer", "null-outer"])
+def test_relay_rejects_direct_responses_and_non_framework_wrappers(store, monkeypatch, shape):
+    ref = "personal.memory.v1#people"
+    wire = framework_relay_response(ref)
+    response = wire["opl_app_contribution"]["response"]
+    invalid_wire = {"data": response["result"], "package": response, "root-result": {"result": response},
+                    "wrapped-framework": {"result": wire}, "missing-outer": {},
+                    "null-outer": {"opl_app_contribution": None}}[shape]
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kwargs:
+                        subprocess.CompletedProcess(argv, 0, json.dumps(invalid_wire), "private diagnostics"))
+    assert relay_read(ref, {}, store.paths)["state"] == "unavailable"
+    assert not store.path.exists()
 
 
 def test_management_default_candidates_approved_and_forgotten_explicit(store, monkeypatch):
