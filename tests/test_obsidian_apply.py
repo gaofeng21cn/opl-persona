@@ -1,4 +1,7 @@
 import hashlib
+import os
+import stat
+import types
 from pathlib import Path
 
 import pytest
@@ -75,6 +78,69 @@ def test_approved_create_is_atomic_and_returns_authority_readback(tmp_path: Path
         "matches_written_bytes": True,
     }
     assert not list(vault.rglob(".persona-note.*"))
+
+
+@pytest.mark.parametrize("operation", ["create", "update"])
+def test_windows_without_fchmod_applies_and_reads_back(tmp_path, monkeypatch, operation):
+    import opl_persona.obsidian_apply as owner
+
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    note = vault / "memo.md"
+    expected = "absent"
+    if operation == "update":
+        note.write_bytes(b"# Previous\n")
+        note.chmod(0o640)
+        expected = digest(note.read_bytes())
+    mode = stat.S_IMODE(note.stat().st_mode) if note.exists() else 0o644
+    chmod_calls = []
+    windows_os = types.SimpleNamespace(**{key: value for key, value in vars(os).items() if key != "fchmod"})
+    windows_os.name = "nt"
+
+    def chmod(path, file_mode):
+        chmod_calls.append((path, file_mode))
+        os.chmod(path, file_mode)
+
+    windows_os.chmod = chmod
+    windows_os.open = lambda *args, **kwargs: pytest.fail("Windows must not fsync a directory")
+    monkeypatch.setattr(owner, "os", windows_os)
+    approved = approve_proposal(
+        proposal(operation=operation, target_path="memo.md", body="# Windows-compatible note", expected_digest=expected),
+        approval_ref="approval://user/windows-note", external_write_allowed=True,
+    )
+    receipt = owner.apply_approved_obsidian_note(approved, approved["approval"], binding=binding(vault))
+    assert len(chmod_calls) == 1 and chmod_calls[0][1] == mode
+    assert "# Windows-compatible note" in note.read_text()
+    assert receipt["readback"]["digest"] == digest(note.read_bytes())
+    assert receipt["readback"]["matches_written_bytes"] is True
+    assert not list(vault.rglob(".persona-note.*"))
+
+
+def test_permission_failure_closes_temporary_handle_and_preserves_target(tmp_path, monkeypatch):
+    import opl_persona.obsidian_apply as owner
+
+    note = tmp_path / "memo.md"
+    original = b"# Previous\n"
+    note.write_bytes(original)
+    handles = []
+    fail_os = types.SimpleNamespace(**vars(os))
+
+    def fdopen(fd, mode):
+        handle = os.fdopen(fd, mode)
+        handles.append(handle)
+        return handle
+
+    def permission_failure(*args):
+        raise PermissionError("Permission denied")
+
+    fail_os.fdopen = fdopen
+    fail_os.fchmod = permission_failure
+    monkeypatch.setattr(owner, "os", fail_os)
+    with pytest.raises(PermissionError):
+        owner._atomic_write(note, b"# Updated\n", mode=0o644, expected_digest=digest(original))
+    assert handles and handles[0].closed
+    assert note.read_bytes() == original
+    assert not list(tmp_path.glob(".persona-note.*"))
 
 
 def test_update_rechecks_expected_digest_and_preserves_file_on_mismatch(tmp_path: Path) -> None:

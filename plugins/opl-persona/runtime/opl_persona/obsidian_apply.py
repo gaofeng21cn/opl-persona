@@ -181,8 +181,11 @@ def _atomic_write(path: Path, content: bytes, *, mode: int, expected_digest: str
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=".persona-note.", suffix=".tmp", dir=path.parent)
     try:
-        os.fchmod(fd, mode)
         with os.fdopen(fd, "wb") as handle:
+            if hasattr(os, "fchmod"):
+                os.fchmod(handle.fileno(), mode)
+            else:
+                os.chmod(temporary, mode)
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
@@ -192,15 +195,16 @@ def _atomic_write(path: Path, content: bytes, *, mode: int, expected_digest: str
         elif not path.is_file() or _digest_bytes(path.read_bytes()) != expected_digest:
             raise ValueError("target changed after approval; expected_digest no longer matches")
         os.replace(temporary, path)
-        try:
-            directory_fd = os.open(path.parent, os.O_RDONLY)
-        except OSError:  # pragma: no cover - platform-specific directory fsync
-            directory_fd = -1
-        if directory_fd >= 0:
+        if os.name != "nt":
             try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+                directory_fd = os.open(path.parent, os.O_RDONLY)
+            except OSError:  # pragma: no cover - platform-specific directory fsync
+                directory_fd = -1
+            if directory_fd >= 0:
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)

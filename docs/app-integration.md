@@ -48,7 +48,8 @@ Restore 由其平台 owner 处理。Package、Binding、凭据和外部数据具
 `command_inputs:{action_ref:{input_schema,defaults}}`。输入沿用 string、object、string_list
 和 string enum。UI 与 descriptor commands 及当前 view command_ids 取交集后呈现表单，
 不按 package_id 推测字段，也不得执行来源投影中的外来动作。行级 actions 预填身份和当前
-digest，不预填 approval_ref 或 external 确认。默认 Context 的 label_i18n 由 locale 消费。
+digest，不预填 approval_ref 或 external 确认。默认 Context 的 label_i18n、summary_i18n
+由 locale 消费；自定义摘要没有译文时使用 summary 原文，不套用默认摘要的旧译文。
 
 proposals 每项包含 id/title/summary/status/source_refs/proposal_digest、完整 proposal、
 approval 及必要 receipt。approve/reject 必填 proposal_id、approval_ref、expected_digest。

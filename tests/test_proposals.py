@@ -33,6 +33,20 @@ def propose(store, value=None):
     return bundle["stored_items"][0]
 
 
+@pytest.mark.parametrize("note_title,expected_title", [
+    ("  Evidence-backed memo  ", "Evidence-backed memo"),
+    ("  ", "Research/new-note.md"),
+    (42, "Research/new-note.md"),
+    (None, "Research/new-note.md"),
+])
+def test_note_presentation_uses_frontmatter_title_and_target_path(store, note_title, expected_title):
+    item = propose(store, note_input() | {"frontmatter": {"title": note_title}})
+    assert item["title"] == expected_title
+    assert item["summary"] == "Research/new-note.md"
+    assert ProposalStore().inspect(item["id"])["title"] == expected_title
+    assert item["proposal"]["payload"]["body"] == note_input()["body"]
+
+
 def review_input(item, approval_ref="approval://user/review"):
     return {"proposal_id": item["id"], "expected_digest": item["proposal_digest"], "approval_ref": approval_ref}
 

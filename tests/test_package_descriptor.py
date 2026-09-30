@@ -40,12 +40,13 @@ def test_package_descriptor_has_one_carrier_root_authority() -> None:
 def test_package_identity_capabilities_and_plugin_version_are_aligned() -> None:
     package = load_json(PACKAGE_PATH)
     plugin = load_json(PLUGIN_PATH)
+    public_plugin = load_json(PLUGIN_ROOT / "plugin.json")
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert package["surface_kind"] == "opl_capability_package_manifest.v2"
     assert package["package_id"] == "opl-persona"
     assert package["package_role"] == "capability_package"
-    assert package["version"] == plugin["version"] == project["project"]["version"]
+    assert package["version"] == plugin["version"] == public_plugin["version"] == project["project"]["version"]
     assert set(package["exports"]["core_module_ids"]) == CAPABILITY_IDS
     assert package["exports"]["core_skill_ids"] == ["opl-persona"]
     assert package["connect_skill_sync_policy"] == {

@@ -72,7 +72,7 @@ personal.inbox.v1#recent
 ```
 
 Working modes are `academic-mail`, `technical-memo`, `academic-website`, and
-`research-writing`, with localized labels, guidance, provenance and digests.
+`research-writing`, with localized labels/summaries, guidance, provenance and digests.
 `context.select` persists the mode; `context.update` requires its current digest
 and source refs. Modes guide drafting, not permission. The contexts read returns
 `active_context` assembled from approved memories only. `person.update` and

@@ -71,6 +71,11 @@ class ProposalStore:
                 raise ValueError("proposal payload must be an object")
             title = payload.get("title") or proposal.get("target_path") or proposal["proposal_kind"]
             summary = payload.get("summary") or proposal.get("operation", "propose") + " -> " + proposal["target"]
+            if proposal["proposal_kind"] == "knowledge.obsidian.note.v1":
+                frontmatter = payload.get("frontmatter")
+                note_title = frontmatter.get("title") if isinstance(frontmatter, dict) else None
+                title = note_title.strip() if isinstance(note_title, str) and note_title.strip() else proposal["target_path"]
+                summary = proposal["target_path"]
             prepared.append({"id": identifier, "title": title, "summary": summary, "status": "pending",
                              "source_refs": source_refs, "proposal_digest": proposal_digest(proposal),
                              "proposal": copy.deepcopy(proposal), "approval": copy.deepcopy(approval),

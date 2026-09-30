@@ -31,6 +31,12 @@ CONTEXT_LABELS = {
     "academic-website": {"zh-CN": "学术网站", "en-US": "Academic website"},
     "research-writing": {"zh-CN": "科研写作", "en-US": "Research writing"},
 }
+CONTEXT_SUMMARIES_ZH = {
+    "academic-mail": "结合既有往来与人物关系处理学术通信",
+    "technical-memo": "以证据支撑技术判断与决策",
+    "academic-website": "面向公开展示的学术内容",
+    "research-writing": "保留来源依据的科研论证与写作",
+}
 
 
 def now() -> str:
@@ -157,6 +163,7 @@ class WorkspaceStore:
         if not self.path.exists():
             contexts = [{"id": mode, "title": title, "summary": summary, "mode": mode,
                          "label_i18n": copy.deepcopy(CONTEXT_LABELS[mode]),
+                         "summary_i18n": {"en-US": summary, "zh-CN": CONTEXT_SUMMARIES_ZH[mode]},
                          "guidance": {"purpose": summary},
                          "source_refs": [f"opl-package://opl-persona/context/{mode}"]}
                         for mode, (title, summary) in CONTEXT_MODES.items()]
@@ -168,6 +175,13 @@ class WorkspaceStore:
         for collection in ("contexts", "people", "memories"):
             if not isinstance(state.get(collection), list) or not all(isinstance(item, dict) for item in state[collection]):
                 raise ValueError(f"invalid workspace {collection}")
+        for context in state["contexts"]:
+            if "summary_i18n" not in context:
+                summary = context["summary"]
+                context["summary_i18n"] = {"en-US": summary}
+                mode = context.get("mode")
+                if mode in CONTEXT_MODES and summary == CONTEXT_MODES[mode][1]:
+                    context["summary_i18n"]["zh-CN"] = CONTEXT_SUMMARIES_ZH[mode]
         return state
 
     def list(self, collection: str, *, status: str | None = None) -> list[dict[str, Any]]:
@@ -211,6 +225,7 @@ class WorkspaceStore:
         return self._update("contexts", {"id": context_id, "mode": context_id, "title": text(title, "title", 512),
                             "summary": text(summary, "summary"), "guidance": copy.deepcopy(guidance),
                             "label_i18n": copy.deepcopy(labels),
+                            "summary_i18n": {"en-US": summary.strip()},
                             "source_refs": refs(source_refs)}, expected_digest)
 
     def select_context(self, context_id: str) -> dict[str, Any]:

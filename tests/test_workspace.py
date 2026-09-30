@@ -32,6 +32,8 @@ def test_four_working_modes_and_persistent_selection(store):
     contexts = store.list("contexts")
     assert {item["mode"] for item in contexts} == set(CONTEXT_MODES)
     assert all(set(item["label_i18n"]) == {"zh-CN", "en-US"} for item in contexts)
+    assert all(set(item["summary_i18n"]) == {"zh-CN", "en-US"} for item in contexts)
+    assert all(item["summary_i18n"]["en-US"] == item["summary"] for item in contexts)
     assert all(item["source_refs"] for item in contexts)
     selected = store.select_context("research-writing")
     assert selected["external_write_allowed"] is False
@@ -40,9 +42,24 @@ def test_four_working_modes_and_persistent_selection(store):
     updated = store.update_context(context_id=item["id"], title=item["title"], summary="Updated writing context",
                                    guidance={"language": "English"}, source_refs=["profile://writing"], expected_digest=item["digest"])
     assert WorkspaceStore().context()["context"]["summary"] == updated["summary"]
+    assert updated["summary_i18n"] == {"en-US": "Updated writing context"}
     with pytest.raises(ValueError, match="expected_digest"):
         store.update_context(context_id=item["id"], title=item["title"], summary="Stale edit", guidance={},
                              source_refs=item["source_refs"], expected_digest=item["digest"])
+
+
+def test_existing_default_summaries_gain_locale_metadata_without_overwriting_custom_text(store):
+    store.select_context("academic-mail")
+    state = json.loads(store.path.read_text())
+    for context in state["contexts"]:
+        context.pop("summary_i18n")
+    state["contexts"][0]["summary"] = "User-authored summary"
+    store.path.write_text(json.dumps(state))
+    before = store.path.read_bytes()
+    contexts = store.list("contexts")
+    assert contexts[0]["summary_i18n"] == {"en-US": "User-authored summary"}
+    assert all(set(item["summary_i18n"]) == {"zh-CN", "en-US"} for item in contexts[1:])
+    assert store.path.read_bytes() == before
 
 
 def test_only_approved_memory_enters_context_and_edit_requires_reapproval(store):
