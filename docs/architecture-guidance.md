@@ -46,8 +46,10 @@ channel callbacks, without sharing registries, sessions, or currentness.
 Persona and Relay use their declared Package and `app-contribution` contracts;
 neither creates another Host or transfers its domain authority to a host.
 
-Packages are distribution carriers, not a synonym for one domain ability. The
-target composition model separates Package, Capability Contract, Provider
+A Package is an owner-defined installable unit of identity, capabilities,
+dependency intent, and App contributions. Its configured native carrier owns
+physical lifecycle and readback; an executor runs admitted work. The target
+composition model separates Package, Capability Contract, Provider
 Adapter, user Resource Binding, and Persona Recipe. It is intended to keep mail,
 knowledge, website, form, and portal modules optional and replaceable without
 adding a fourth public product layer. See
@@ -82,13 +84,19 @@ system keeps its own source of truth.
 | --- | --- | --- |
 | `one-person-lab` | Generic Package contracts, installed discovery, carrier delegation, and aggregation | Package publication, carrier physical state, mail, Persona, website, or UI business state |
 | `one-person-lab-app` | App product contract, page state, contribution consumption, acceptance | Domain data, mail semantics, website deployment |
-| `opl-aion-shell` | Current Stable Shell implementation | App product contracts or domain authority |
-| `opl-studio` | DSH application host, native Codex and delivery transport composition | Framework Package graph or domain authority |
+| `opl-studio` | Current Desktop, WebUI and Docker App Shell; DSH/Cordis Application Host, native Codex and delivery composition | Framework Package graph or domain authority |
+| `opl-aion-shell` | Retired source, historical migration baselines and pinned fixtures | Current App implementation, product contracts or domain authority |
 | `opl-relay` | Mail identities, evidence, relationship memory, draft lifecycle, send receipts | Persona orchestration, website CMS, Obsidian vault |
 | `opl-persona` | PI context, provenance, cross-domain proposal shape and proposal state | Mail store, private vault, website source, credentials |
 | `gflab_web` | Public publication/news source, Hugo build, deployment source | Private Persona state or mail state |
 | Obsidian vault | Private notes, technical memos, and all user-maintained personal profile values | Public website or mail delivery |
 | Mail provider / Apple Mail | Mailbox and final send state | Persona proposal state |
+
+App selects the current Shell through its
+[Shell adapter](https://github.com/gaofeng21cn/one-person-lab-app/blob/main/contracts/app-shell-adapter.json).
+[OPL DSH](https://github.com/gaofeng21cn/opl-dsh) independently enhances the
+official DeepSeek Harness desktop; it has its own installation and update
+ownership.
 
 Do not create separate repositories for a Relay UI, Persona UI, shared core,
 or one repository per adapter. These are integration surfaces or owner-owned
@@ -104,7 +112,7 @@ Code and private data are physically separate:
 ├── opl-persona/        # source, plugin, package, tests, docs
 ├── one-person-lab/     # OPL base contracts and runtime
 ├── one-person-lab-app/ # App product and contracts
-├── opl-aion-shell/     # desktop implementation
+├── opl-studio/         # current App Shell and DSH/Cordis Application Host
 └── gflab_web/          # website source and deployment configuration
 
 ~/OPL/profiles/gaofeng/ # one user-owned Profile Workspace
