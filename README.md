@@ -36,6 +36,22 @@ memo from the context already available to the PI.
 Persona is a judgment and coordination layer. It is not a replacement mail
 client, a second Obsidian vault, or a website CMS.
 
+Four callable working modes cover academic mail, technical memo, academic
+website and research writing. People and cross-source evidence memory are
+reviewable; context uses approved memory only. Management includes candidates
+by default and can show forgotten entries. Relay mail memory is read through
+its public Package ABI, never its database. Triage, capture and note proposals
+persist across CLI runs; inspect/approve/reject bind their exact digest.
+Obsidian application needs a separate, explicitly confirmed resource grant and
+returns a persisted authority readback. Review never authorizes send/publish.
+
+`context list/select/update`, `people list/update`, `memory list/update/review`,
+and `proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian`
+share the Package JSON contracts (`--input <file-or->`). Concurrent CLI writers
+share a cross-platform lock and atomic saves under `data/persona`. Studio views
+mount in the existing `settings.section` slot; read models supply localized
+modes, action forms and digest-bound row inputs.
+
 ## The Profile Workspace
 
 Each digital counterpart has one user-owned **Profile Workspace**. It holds

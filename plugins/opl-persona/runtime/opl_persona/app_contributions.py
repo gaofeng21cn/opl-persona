@@ -10,6 +10,9 @@ from .core import (
 )
 from .inbox import InboxStore
 from .paths import PersonaPaths
+from .proposals import ProposalStore
+from .workspace import CONTEXT_MODES, WorkspaceStore
+from .bindings import list_resource_bindings
 
 
 ABI_SCHEMA = "opl-package-app-contribution-cli.v1"
@@ -27,6 +30,24 @@ DATA_CONTRACTS: dict[str, dict[str, Any]] = {
         "operation": "read",
         "input": {},
         "result": "personal.context.v1#proposals.result",
+    },
+    "personal.context.v1#contexts": {
+        "operation": "read",
+        "input": {
+            "context_id": {"type": "string", "required": False, "enum": list(CONTEXT_MODES)},
+            "person_id": {"type": "string", "required": False},
+        },
+        "result": "personal.context.v1#contexts.result",
+    },
+    "personal.memory.v1#people": {
+        "operation": "read",
+        "input": {},
+        "result": "personal.memory.v1#people.result",
+    },
+    "personal.memory.v1#memories": {
+        "operation": "read",
+        "input": {"status": {"type": "string", "required": False, "enum": ["active", "approved", "candidate", "forgotten", "all"]}},
+        "result": "personal.memory.v1#memories.result",
     },
     "personal.inbox.v1#recent": {
         "operation": "read",
@@ -50,6 +71,7 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
         "input": {
             "proposal_id": {"type": "string", "required": True},
             "approval_ref": {"type": "string", "required": True},
+            "expected_digest": {"type": "string", "required": True},
         },
         "result": "personal.context.v1#proposal.approve.result",
     },
@@ -94,6 +116,90 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
         "result": "knowledge.obsidian.v1#note.propose.result",
     },
 }
+
+ACTION_CONTRACTS.update({
+    "personal.context.v1#proposal.reject": {
+        "operation": "execute", "confirmation_required": True,
+        "input": dict(ACTION_CONTRACTS["personal.context.v1#proposal.approve"]["input"]),
+        "result": "personal.context.v1#proposal.reject.result",
+    },
+    "knowledge.obsidian.v1#note.apply": {
+        "operation": "execute", "confirmation_required": True,
+        "input": {
+            "proposal_id": {"type": "string", "required": True},
+            "expected_digest": {"type": "string", "required": True},
+            "binding_id": {"type": "string", "required": True},
+            "external_approval": {"type": "object", "required": False},
+            "external_approval_ref": {"type": "string", "required": False},
+        },
+        "result": "knowledge.obsidian.v1#note.apply.result",
+    },
+    "knowledge.obsidian.v1#note.authorize": {
+        "operation": "execute", "confirmation_required": True,
+        "input": {
+            "proposal_id": {"type": "string", "required": True},
+            "expected_digest": {"type": "string", "required": True},
+            "binding_id": {"type": "string", "required": True},
+            "approval_ref": {"type": "string", "required": True},
+            "confirmation": {"type": "string", "required": True, "enum": ["confirmed"]},
+        },
+        "result": "knowledge.obsidian.v1#note.authorize.result",
+    },
+    "personal.context.v1#context.select": {
+        "operation": "execute", "confirmation_required": False,
+        "input": {"context_id": {"type": "string", "required": True, "enum": list(CONTEXT_MODES)}},
+        "result": "personal.context.v1#context.select.result",
+    },
+    "personal.context.v1#context.update": {
+        "operation": "execute", "confirmation_required": False,
+        "input": {
+            "context_id": {"type": "string", "required": True, "enum": list(CONTEXT_MODES)},
+            "title": {"type": "string", "required": True},
+            "summary": {"type": "string", "required": True},
+            "guidance": {"type": "object", "required": True},
+            "label_i18n": {"type": "object", "required": False},
+            "source_refs": {"type": "string_list", "required": True},
+            "expected_digest": {"type": "string", "required": True},
+        },
+        "result": "personal.context.v1#context.update.result",
+    },
+    "personal.memory.v1#person.update": {
+        "operation": "execute", "confirmation_required": False,
+        "input": {
+            "person_id": {"type": "string", "required": True},
+            "display_name": {"type": "string", "required": True},
+            "summary": {"type": "string", "required": True},
+            "aliases": {"type": "string_list", "required": True},
+            "source_refs": {"type": "string_list", "required": True},
+            "expected_digest": {"type": "string", "required": True},
+        },
+        "result": "personal.memory.v1#person.update.result",
+    },
+    "personal.memory.v1#memory.update": {
+        "operation": "execute", "confirmation_required": False,
+        "input": {
+            "memory_id": {"type": "string", "required": True},
+            "title": {"type": "string", "required": True},
+            "summary": {"type": "string", "required": True},
+            "memory_kind": {"type": "string", "required": True},
+            "person_ids": {"type": "string_list", "required": True},
+            "context_ids": {"type": "string_list", "required": True},
+            "source_refs": {"type": "string_list", "required": True},
+            "expected_digest": {"type": "string", "required": True},
+        },
+        "result": "personal.memory.v1#memory.update.result",
+    },
+    "personal.memory.v1#memory.review": {
+        "operation": "execute", "confirmation_required": True,
+        "input": {
+            "memory_id": {"type": "string", "required": True},
+            "status": {"type": "string", "required": True, "enum": ["approved", "candidate", "forgotten"]},
+            "approval_ref": {"type": "string", "required": True},
+            "expected_digest": {"type": "string", "required": True},
+        },
+        "result": "personal.memory.v1#memory.review.result",
+    },
+})
 
 
 PROPOSAL_BUILDERS: dict[str, Callable[[dict[str, object]], dict[str, Any]]] = {
@@ -163,18 +269,144 @@ def _validate_input(value: dict[str, object], contract: dict[str, Any]) -> None:
             raise ValueError(f"input.{name} has an unsupported contract type")
 
 
-def _unavailable_data(contract: dict[str, Any]) -> dict[str, object]:
-    return {
-        "kind": "data",
-        "state": "input_required",
-        "result_schema": contract["result"],
-        "input_schema": contract["input"],
-        "reason": "Persona has no configured read-model store for this contribution.",
-        "data": None,
-    }
+VIEW_ACTIONS = {
+    "personal.context.v1#today": [],
+    "personal.inbox.v1#recent": ["personal.inbox.v1#capture.propose"],
+    "personal.context.v1#contexts": ["personal.context.v1#context.select", "personal.context.v1#context.update"],
+    "personal.memory.v1#people": ["personal.memory.v1#person.update"],
+    "personal.memory.v1#memories": ["personal.memory.v1#memory.update", "personal.memory.v1#memory.review"],
+    "personal.context.v1#proposals": [
+        "personal.context.v1#proposal.inspect", "personal.context.v1#proposal.approve", "personal.context.v1#proposal.reject",
+        "communications.mail.v1#triage.propose", "personal.inbox.v1#capture.propose",
+        "knowledge.obsidian.v1#note.propose", "knowledge.obsidian.v1#note.authorize", "knowledge.obsidian.v1#note.apply",
+    ],
+}
 
 
-def _inbox_read(contract: dict[str, Any], *, active_only: bool = False) -> dict[str, object]:
+def command_inputs(ref: str) -> dict[str, object]:
+    return {action_ref: {"input_schema": ACTION_CONTRACTS[action_ref]["input"],
+                         "defaults": {"expected_digest": "absent"} if action_ref in {
+                             "personal.memory.v1#person.update", "personal.memory.v1#memory.update"} else {}}
+            for action_ref in VIEW_ACTIONS[ref]}
+
+
+def _row_action(ref: str, value: dict[str, object], label_i18n: dict[str, str] | None = None) -> dict[str, object]:
+    if ref not in ACTION_CONTRACTS:
+        raise ValueError("row action must belong to this package")
+    action: dict[str, object] = {"action_ref": ref, "input": value}
+    if label_i18n is not None:
+        action["label_i18n"] = label_i18n
+    return action
+
+
+MEMORY_REVIEW_LABELS = {
+    "approved": {"zh-CN": "确认记忆", "en-US": "Confirm memory"},
+    "candidate": {"zh-CN": "保留候选", "en-US": "Keep candidate"},
+    "forgotten": {"zh-CN": "忘记记忆", "en-US": "Forget memory"},
+}
+
+
+def _proposal_row(item: dict[str, Any], bindings: list[dict[str, Any]]) -> dict[str, Any]:
+    identity = {"proposal_id": item["id"], "expected_digest": item["proposal_digest"]}
+    actions = [_row_action("personal.context.v1#proposal.inspect", {"proposal_id": item["id"]})]
+    if item["status"] == "pending":
+        actions += [_row_action(f"personal.context.v1#proposal.{verb}", identity) for verb in ("approve", "reject")]
+    if item["status"] == "approved" and item["proposal"]["proposal_kind"] == "knowledge.obsidian.note.v1":
+        selected = {"binding_id": bindings[0]["binding_id"]} if len(bindings) == 1 else {}
+        actions.append(_row_action("knowledge.obsidian.v1#note.authorize", identity | selected))
+        authorization = item.get("external_approval")
+        if isinstance(authorization, dict):
+            actions.append(_row_action("knowledge.obsidian.v1#note.apply", identity | {
+                "binding_id": authorization["binding_id"], "external_approval_ref": authorization["approval_ref"]}))
+    return item | {"actions": actions}
+
+
+def _relay_projection(evidence: dict[str, Any], collection: str) -> list[dict[str, Any]]:
+    projected = []
+    for raw in evidence["items"]:
+        if not isinstance(raw, dict):
+            continue
+        source_refs = raw.get("source_refs")
+        if not isinstance(source_refs, list) or not source_refs or not all(isinstance(ref, str) and ref.strip() for ref in source_refs):
+            continue
+        identifier = raw.get("id") or raw.get("person_id") or raw.get("memory_id") or raw.get("entity")
+        title = raw.get("title") or raw.get("display_name") or raw.get("name") or raw.get("entity") or identifier
+        summary = raw.get("summary") or raw.get("statement") or raw.get("content")
+        if not isinstance(identifier, (str, int)) or not isinstance(title, str):
+            continue
+        if collection == "memories" and raw.get("status") not in {"approved", "candidate", "forgotten"}:
+            continue
+        projected.append({"id": f"relay:{identifier}", "title": title, "summary": summary if isinstance(summary, str) else "",
+                          "status": raw.get("status", "approved"), "source_refs": source_refs,
+                          "owner_package_id": "opl-relay", "owner_ref": evidence["ref"], "actions": []})
+    return projected
+
+
+def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
+    store = WorkspaceStore()
+    data: dict[str, Any] = {}
+    if ref == "personal.context.v1#proposals":
+        try:
+            bindings = [{"binding_id": identifier, **binding.to_dict()} for identifier, binding in
+                        list_resource_bindings(store.paths.workspace).items()
+                        if binding.provider_id == "obsidian" and binding.capability_id in {
+                            "knowledge.obsidian.v1", "knowledge.documents.v1"} and "notes.write" in binding.scopes]
+        except FileNotFoundError:
+            bindings = []
+        data["bindings"] = bindings
+        items = [_proposal_row(item, bindings) for item in ProposalStore().list()]
+    elif ref == "personal.context.v1#contexts":
+        items = []
+        for item in store.list("contexts"):
+            fields = {"context_id": item["id"], "title": item["title"], "summary": item["summary"],
+                      "guidance": item["guidance"], "label_i18n": item.get("label_i18n", {}),
+                      "source_refs": item["source_refs"], "expected_digest": item["digest"]}
+            items.append(item | {"actions": [_row_action("personal.context.v1#context.select", {"context_id": item["id"]}),
+                                               _row_action("personal.context.v1#context.update", fields)]})
+        data["active_context"] = store.context(value.get("context_id"), value.get("person_id"))
+        relay = store.relay("search", entity=value.get("person_id", ""))
+        data["relay"] = {key: item for key, item in relay.items() if key != "items"}
+        mail_memories = [item for item in _relay_projection(relay, "memories") if item["status"] == "approved"]
+        data["active_context"]["mail_memories"] = mail_memories
+        data["active_context"]["source_refs"] = list(dict.fromkeys(data["active_context"]["source_refs"] + [
+            source for item in mail_memories for source in item["source_refs"]]))
+    elif ref == "personal.memory.v1#people":
+        items = []
+        memories = store.list("memories", status="approved")
+        for item in store.list("people"):
+            fields = {"person_id": item["id"], "display_name": item["display_name"], "summary": item["summary"],
+                      "aliases": item["aliases"], "source_refs": item["source_refs"], "expected_digest": item["digest"]}
+            items.append(item | {"owner_package_id": "opl-persona", "memories": [memory for memory in memories if item["id"] in memory["person_ids"]],
+                                 "actions": [_row_action("personal.memory.v1#person.update", fields)]})
+        relay = store.relay("people")
+        items += _relay_projection(relay, "people")
+        data["relay"] = {key: item for key, item in relay.items() if key != "items"}
+    else:
+        status = value.get("status", "active")
+        items = []
+        for item in store.list("memories", status=None if status in {"all", "active"} else status):
+            if status == "active" and item["status"] == "forgotten":
+                continue
+            fields = {key: item[key] for key in ("title", "summary", "memory_kind", "person_ids", "context_ids", "source_refs")}
+            fields.update(memory_id=item["id"], expected_digest=item["digest"])
+            actions = [_row_action("personal.memory.v1#memory.update", fields)]
+            actions += [_row_action("personal.memory.v1#memory.review", {"memory_id": item["id"], "status": decision,
+                        "expected_digest": item["digest"]}, MEMORY_REVIEW_LABELS[decision])
+                        for decision in ("approved", "candidate", "forgotten") if decision != item["status"]]
+            items.append(item | {"owner_package_id": "opl-persona", "actions": actions})
+        relay = store.relay("search", status=status)
+        relay_items = _relay_projection(relay, "memories")
+        items += [item for item in relay_items if status in {"all", "active"} or item["status"] == status]
+        data["relay"] = {key: item for key, item in relay.items() if key != "items"}
+        data["memory_policy"] = "approved_only_for_context"
+    data.update(items=items, count=len(items), command_inputs=command_inputs(ref))
+    if ref == "personal.context.v1#proposals" and len(data["bindings"]) == 1:
+        for action in ("knowledge.obsidian.v1#note.authorize", "knowledge.obsidian.v1#note.apply"):
+            data["command_inputs"][action]["defaults"]["binding_id"] = data["bindings"][0]["binding_id"]
+    return {"kind": "data", "state": "ready", "result_schema": contract["result"], "input_schema": contract["input"], "data": data}
+
+
+def _inbox_read(ref: str, contract: dict[str, Any], *, active_only: bool = False) -> dict[str, object]:
     items = InboxStore.from_paths(PersonaPaths.resolve()).list()
     if active_only:
         items = [item for item in items if item.status in {"staged", "routed"}]
@@ -188,20 +420,40 @@ def _inbox_read(contract: dict[str, Any], *, active_only: bool = False) -> dict[
             "items": projected_items,
             "count": len(projected_items),
             "source_policy": "persona_private_refs_only",
+            "command_inputs": command_inputs(ref),
         },
     }
 
 
-def _unavailable_action(contract: dict[str, Any]) -> dict[str, object]:
-    return {
-        "kind": "action",
-        "status": "not_executed",
-        "confirmation_required": contract["confirmation_required"],
-        "input_schema": contract["input"],
-        "result_schema": contract["result"],
-        "execution_policy": "owner_handler_required",
-        "reason": "Persona has no configured proposal action handler for this contribution.",
-    }
+def _execute(ref: str, contract: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
+    builder = PROPOSAL_BUILDERS.get(ref)
+    if builder is not None:
+        return _proposal_result(contract, ProposalStore().persist_bundle(builder(value)))
+    proposals = ProposalStore()
+    workspace = WorkspaceStore()
+    if ref == "personal.context.v1#proposal.inspect":
+        item = proposals.inspect(**value)
+    elif ref in {"personal.context.v1#proposal.approve", "personal.context.v1#proposal.reject"}:
+        item = proposals.review(**value, decision="approved" if ref.endswith("approve") else "rejected")
+    elif ref == "knowledge.obsidian.v1#note.apply":
+        item = proposals.apply_obsidian(**value)
+    elif ref == "knowledge.obsidian.v1#note.authorize":
+        item = proposals.authorize_obsidian(**value)
+    elif ref == "personal.context.v1#context.select":
+        item = workspace.select_context(**value)
+    elif ref == "personal.context.v1#context.update":
+        item = workspace.update_context(**value)
+    elif ref == "personal.memory.v1#person.update":
+        item = workspace.update_person(**value)
+    elif ref == "personal.memory.v1#memory.update":
+        item = workspace.update_memory(**value)
+    elif ref == "personal.memory.v1#memory.review":
+        item = workspace.review_memory(**value)
+    else:
+        raise ValueError("no handler for declared action")
+    return {"kind": "action", "status": item.get("status", "ready"), "item": item,
+            "confirmation_required": contract["confirmation_required"], "result_schema": contract["result"],
+            "execution_policy": "obsidian_owner_apply" if ref.endswith("note.apply") else "persona_local_only"}
 
 
 def _proposal_result(contract: dict[str, Any], proposal_bundle: dict[str, Any]) -> dict[str, object]:
@@ -262,20 +514,16 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
         contract = data_contract if operation == "read" else action_contract
         if contract is None:
             raise ValueError(f"{ref} does not support {operation}")
-        _validate_input(_request_input(request.get("input")), contract)
+        value = _request_input(request.get("input"))
+        _validate_input(value, contract)
         if operation == "read":
             result = (
-                _inbox_read(contract, active_only=ref == "personal.context.v1#today")
+                _inbox_read(ref, contract, active_only=ref == "personal.context.v1#today")
                 if ref in {"personal.context.v1#today", "personal.inbox.v1#recent"}
-                else _unavailable_data(contract)
+                else _workspace_read(ref, contract, value)
             )
         else:
-            builder = PROPOSAL_BUILDERS.get(ref)
-            result = (
-                _proposal_result(contract, builder(_request_input(request.get("input"))))
-                if builder is not None
-                else _unavailable_action(contract)
-            )
+            result = _execute(ref, contract, value)
         return 0, _response(ref, operation, result)
-    except ValueError as exc:
+    except (ValueError, OSError, KeyError, RuntimeError) as exc:
         return 2, _error(ref, str(exc))

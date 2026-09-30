@@ -25,13 +25,7 @@ CAPABILITY_IDS = {
     "communications.mail.v1",
     "website.publication.v1",
 }
-ACTION_REFS = {
-    "personal.context.v1#proposal.inspect",
-    "personal.context.v1#proposal.approve",
-    "communications.mail.v1#triage.propose",
-    "personal.inbox.v1#capture.propose",
-    "knowledge.obsidian.v1#note.propose",
-}
+ACTION_REFS = set(ACTION_CONTRACTS)
 
 
 def load_json(path: Path) -> dict:
@@ -133,6 +127,7 @@ def test_app_contributions_are_role_neutral_and_reference_persona_actions() -> N
         "views",
         "commands",
         "badges",
+        "ui",
     }
 
     navigation_ids = [item["navigation_id"] for item in contributions["navigation"]]
@@ -156,6 +151,14 @@ def test_app_contributions_are_role_neutral_and_reference_persona_actions() -> N
     serialized = json.dumps(contributions)
     assert "standard_agent" not in serialized
     assert not ({"component", "code", "path", "url"} & set(contributions))
+
+    assert {placement["view_id"] for placement in contributions["ui"]} == set(view_ids)
+    for placement in contributions["ui"]:
+        assert placement["slot"] == "settings.section"
+        assert placement["contribution_kind"] == "view"
+        assert placement["trust_tier"] == "declarative"
+        assert placement["scope"] == "root"
+    assert {view["view_type"] for view in contributions["views"]} <= {"list_detail", "timeline", "approval_diff"}
 
 
 def test_app_contribution_abi_is_package_owned_and_matches_declared_refs() -> None:

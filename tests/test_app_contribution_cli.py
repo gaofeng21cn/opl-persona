@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+import pytest
 
 from opl_persona.app_contributions import (
     ACTION_CONTRACTS,
@@ -21,6 +22,11 @@ from relay_v2 import mail_assessment, relay_v2_evidence
 
 ROOT = Path(__file__).parents[1]
 PLUGIN_ROOT = ROOT / "plugins" / "opl-persona"
+
+
+@pytest.fixture(autouse=True)
+def isolated_profile(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
 
 
 def run_cli(monkeypatch, capsys, request: object) -> tuple[int, dict]:
@@ -46,7 +52,7 @@ def test_describe_exposes_only_typed_declared_data_contract(monkeypatch, capsys)
     assert response["result"]["operations"] == [DATA_CONTRACTS["personal.context.v1#today"]]
 
 
-def test_read_returns_typed_unavailable_projection_without_private_data(monkeypatch, capsys) -> None:
+def test_read_returns_ready_empty_persistent_proposals(monkeypatch, capsys) -> None:
     code, response = run_cli(
         monkeypatch,
         capsys,
@@ -59,14 +65,10 @@ def test_read_returns_typed_unavailable_projection_without_private_data(monkeypa
     )
 
     assert code == 0
-    assert response["result"] == {
-        "kind": "data",
-        "state": "input_required",
-        "result_schema": "personal.context.v1#proposals.result",
-        "input_schema": {},
-        "reason": "Persona has no configured read-model store for this contribution.",
-        "data": None,
-    }
+    assert response["result"]["kind"] == "data"
+    assert response["result"]["state"] == "ready"
+    assert response["result"]["data"]["items"] == []
+    assert response["result"]["data"]["command_inputs"]
 
 
 def test_read_projects_active_persona_context_refs_only(
@@ -109,6 +111,7 @@ def test_read_projects_active_persona_context_refs_only(
         "items": [active.to_dict()],
         "count": 1,
         "source_policy": "persona_private_refs_only",
+        "command_inputs": {},
     }
     assert "body" not in result["data"]["items"][0]
 
@@ -153,7 +156,7 @@ def test_read_projects_persona_private_inbox_refs_only(monkeypatch, capsys, tmp_
     assert "body" not in result["data"]["items"][0]
 
 
-def test_execute_never_approves_or_writes_without_owner_handler(monkeypatch, capsys) -> None:
+def test_execute_never_approves_without_exact_digest(monkeypatch, capsys) -> None:
     code, response = run_cli(
         monkeypatch,
         capsys,
@@ -168,16 +171,8 @@ def test_execute_never_approves_or_writes_without_owner_handler(monkeypatch, cap
         },
     )
 
-    assert code == 0
-    assert response["result"] == {
-        "kind": "action",
-        "status": "not_executed",
-        "confirmation_required": True,
-        "input_schema": ACTION_CONTRACTS["personal.context.v1#proposal.approve"]["input"],
-        "result_schema": "personal.context.v1#proposal.approve.result",
-        "execution_policy": "owner_handler_required",
-        "reason": "Persona has no configured proposal action handler for this contribution.",
-    }
+    assert code == 2
+    assert response["error"]["message"] == "input.expected_digest is required"
 
 
 def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsys, tmp_path: Path) -> None:
@@ -332,10 +327,21 @@ def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
         "personal.context.v1#today",
         "personal.context.v1#proposals",
         "personal.inbox.v1#recent",
+        "personal.context.v1#contexts",
+        "personal.memory.v1#people",
+        "personal.memory.v1#memories",
     }
     assert set(ACTION_CONTRACTS) == {
         "personal.context.v1#proposal.inspect",
         "personal.context.v1#proposal.approve",
+        "personal.context.v1#proposal.reject",
+        "personal.context.v1#context.select",
+        "personal.context.v1#context.update",
+        "personal.memory.v1#person.update",
+        "personal.memory.v1#memory.update",
+        "personal.memory.v1#memory.review",
+        "knowledge.obsidian.v1#note.authorize",
+        "knowledge.obsidian.v1#note.apply",
         "communications.mail.v1#triage.propose",
         "personal.inbox.v1#capture.propose",
         "knowledge.obsidian.v1#note.propose",
@@ -359,7 +365,7 @@ def test_installed_carrier_wrapper_serves_abi_without_the_source_checkout(tmp_pa
             "source_refs": ["obsidian://vault/memo.md"],
         },
     }
-    environment = os.environ | {"PYTHONPATH": ""}
+    environment = os.environ | {"PYTHONPATH": "", "OPL_PROFILE_WORKSPACE": str(tmp_path / "profile")}
     result = subprocess.run(
         [str(wrapper), "--json", "app-contribution"],
         cwd=tmp_path,

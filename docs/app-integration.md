@@ -19,6 +19,11 @@ Package descriptor 声明入口不代表相应账号、vault 或网站已配置�
 Framework route readback、Provider Binding 健康以及 App 实际渲染是不同证据。
 Persona 不在本仓保存 App 功能完成表、已安装包清单或其他 owner 的待办。
 
+Framework 当前仅投影 `app_contributions.ui[]`。Persona 的六个视图均声明为现有
+`settings.section` slot 中的 view，使用 `trust_tier=declarative`、`scope=root` 和
+精确 view_id/contribution_id/sort_order。仅声明 views/navigation 不能挂载。
+视图使用既有 list_detail、timeline、approval_diff，不新增平台 slot。
+
 ## 状态与动作
 
 | 对象 | 决策与执行 owner | App 消费边界 |
@@ -38,6 +43,24 @@ Restore 由其平台 owner 处理。Package、Binding、凭据和外部数据具
 统一审核只统一视图语言。每项审核必须引用 Package identity、proposal/draft identity、
 `data_ref`、`action_ref`、目标 owner、evidence/provenance、diff 或 draft fingerprint、
 必要确认，以及执行后的 authority receipt。App 不持久化第二份领域审批状态。
+
+所有 read 返回 `result:{kind:"data",state:"ready",data:{items:[...]}}`，data 还提供
+`command_inputs:{action_ref:{input_schema,defaults}}`。输入沿用 string、object、string_list
+和 string enum。UI 与 descriptor commands 及当前 view command_ids 取交集后呈现表单，
+不按 package_id 推测字段，也不得执行来源投影中的外来动作。行级 actions 预填身份和当前
+digest，不预填 approval_ref 或 external 确认。默认 Context 的 label_i18n 由 locale 消费。
+
+proposals 每项包含 id/title/summary/status/source_refs/proposal_digest、完整 proposal、
+approval 及必要 receipt。approve/reject 必填 proposal_id、approval_ref、expected_digest。
+Memory 管理默认显示 candidate/approved，status=all 可审阅 forgotten；Context 只组装
+approved，编辑记忆须重新审核。
+
+Obsidian read model 提供当前 notes.write binding；只有一个时可预填 binding_id，不默认
+授权。用户先批准提案，再通过 note.authorize 对精确 proposal/digest/binding 提交独立
+approval_ref 和 confirmation=confirmed。owner 持久化 scope-bound approval，note.apply
+随后引用 external_approval_ref，无需手填授权对象。自动化可改用独立 external_approval
+对象，两种输入必须且只能选一种。资源重绑定、digest 或文件前提失效均拒绝执行；成功后
+显示真实 readback receipt。普通 proposal approval 不允许 send/publish，也不会自动 apply。
 
 Persona proposal 的批准只允许该精确 proposal 进入相应 adapter。网站本地 apply 不等于发布；
 Obsidian 写入需要 Binding scope、proposal digest 与目标文件 precondition；Relay 草稿审核

@@ -54,20 +54,48 @@ Inbox input -> personal.inbox.v1
 knowledge input -> knowledge.obsidian.note.v1
 ```
 
-The App contribution ABI exposes three data refs and five action refs. The
+The App contribution ABI exposes six data refs. The
 Persona-owned read-model store serves both `personal.context.v1#today` and
 `personal.inbox.v1#recent` as refs-only projections: `today` includes active
 (`staged` or `routed`) Inbox entries, while `recent` includes all entries. The
 projection contains bounded summaries and opaque source refs, never source
-content. `personal.context.v1#proposals` remains `input_required`; proposal
-inspect/approve return `owner_handler_required`. The executable proposal
-actions are limited to:
+content. `workspace.py` adds working modes, derived people, and evidence memory;
+`proposals.py` persists proposals, review decisions and owner receipts. Read refs:
 
 ```text
-communications.mail.v1#triage.propose
-personal.inbox.v1#capture.propose
-knowledge.obsidian.v1#note.propose
+personal.context.v1#today
+personal.context.v1#contexts
+personal.context.v1#proposals
+personal.memory.v1#people
+personal.memory.v1#memories
+personal.inbox.v1#recent
 ```
+
+Working modes are `academic-mail`, `technical-memo`, `academic-website`, and
+`research-writing`, with localized labels, guidance, provenance and digests.
+`context.select` persists the mode; `context.update` requires its current digest
+and source refs. Modes guide drafting, not permission. The contexts read returns
+`active_context` assembled from approved memories only. `person.update` and
+`memory.update` require `expected_digest=absent` for creation or the current
+digest for replacement. A memory edit always resets it to `candidate`.
+`memory.review` binds memory identity/digest, a user review ref, and a decision
+(`approved`, `candidate`, `forgotten`). Management defaults to candidate and
+approved entries; `status=all` includes forgotten records.
+
+Relay mail memory is read through `opl app contribution read --package-id
+opl-relay` at `personal.memory.v1#people` and `#search`, with the same Profile
+selector. Approved bounded evidence is not persisted by Persona. Missing Relay
+availability is a local diagnostic in a ready Persona read model; there is no
+database fallback. Cross-source derived state lives in `data/persona/workspace.json`.
+Names and aliases alone do not automatically merge source identities.
+
+All CLI proposal builders and the existing three App propose actions persist
+to `data/persona/proposals.json`. Capture/triage also stage Persona-local Inbox
+captures through `inbox.py`. Replaying identical proposals preserves review
+state. A changed pending candidate replaces the old candidate; changed reviewed
+identities are rejected. Inspect returns the complete proposal. Approve/reject
+require `proposal_id + approval_ref + expected_digest` and persist decisions.
+Approval never grants external write, mail send, or website publish.
 
 ## Current proposal contract
 
@@ -101,14 +129,27 @@ before using it to report successful delivery.
 `knowledge.obsidian.note.v1` is a proposal for exactly one relative Markdown
 target path. It carries frontmatter, body, links, tags, evidence references,
 and a target precondition: `expected_digest` is `absent` for creation or the
-current SHA-256 digest for update. The CLI and App proposal actions do not apply
-notes. The separate owner adapter in `obsidian_apply.py` implements
+current SHA-256 digest for update. Proposal generation does not apply notes.
+The separate owner adapter in `obsidian_apply.py` implements
 `apply_approved_obsidian_note`: it requires an exact proposal digest, a separate
 approved record with `external_write_allowed=true`, and a Resource Binding with
 `notes.write` scope. It rejects unsafe paths and symlinks, rechecks the target
 digest before atomic replacement, and compares the actual written bytes before
-returning `opl-persona-obsidian-apply-receipt.v1`. This library API and its tests
-do not establish a public CLI/App apply action or a configured private vault.
+returning `opl-persona-obsidian-apply-receipt.v1`. Public
+`knowledge.obsidian.v1#note.authorize` takes proposal identity/digest, binding id,
+a distinct approval ref, and `confirmation=confirmed`. It persists an independent
+scope-bound approval without writing a note. `#note.apply` requires the same
+identity/digest/binding and exactly one of `external_approval_ref` (persisted
+grant) or `external_approval` (explicit object). The object binds proposal digest,
+binding id, provider, capability, resource ref and `scope=notes.write`, with
+`status=approved` and `external_write_allowed=true`. Rebinding invalidates the
+grant. Successful readback is stored with the proposal; repeated apply points
+to the existing receipt instead of re-executing. No send/publish is exported.
+
+Convenience CLI routes share the ABI: `context list/select/update`,
+`people list/update`, `memory list/update/review`, and
+`proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian`.
+Writes take JSON through `--input <file-or->`; list accepts optional input.
 
 ## Host Boundary
 
@@ -147,3 +188,12 @@ stores its machine-maintained state under `<workspace>/data/persona`; Relay
 uses the sibling `<workspace>/data/relay`. When unset, Persona uses
 `~/OPL/profiles/<user>` and its `data/persona` child. The
 repository, installed plugin, and Package are never data authorities.
+
+CLI mutations, including setup and binding changes, share
+`data/persona/.workspace.lock`. POSIX uses `flock`; Windows uses a stable
+single-byte `msvcrt` lock. Read/modify/write runs entirely under this lock;
+JSON saves fsync the temporary file and atomically replace the destination,
+with directory fsync on POSIX. Atomicity is per file, not a transaction spanning
+the proposal and Inbox files. A failed staging attempt can be replayed
+idempotently. An interrupted external apply before receipt persistence requires
+owner reconciliation; it is not reported as applied or blindly retried.

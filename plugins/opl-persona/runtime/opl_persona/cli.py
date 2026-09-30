@@ -16,6 +16,8 @@ from .core import (
     dump_json,
 )
 from .paths import PersonaPaths
+from .proposals import ProposalStore
+from .workspace import workspace_lock
 from .obsidian import memo_proposals_from_file
 from .bindings import (
     DEFAULT_OBSIDIAN_BINDING_ID,
@@ -23,6 +25,24 @@ from .bindings import (
     list_resource_bindings,
     set_resource_binding,
 )
+
+
+WORKSPACE_COMMANDS = {
+    "context": {"list": ("read", "personal.context.v1#contexts"),
+                "select": ("execute", "personal.context.v1#context.select"),
+                "update": ("execute", "personal.context.v1#context.update")},
+    "people": {"list": ("read", "personal.memory.v1#people"),
+               "update": ("execute", "personal.memory.v1#person.update")},
+    "memory": {"list": ("read", "personal.memory.v1#memories"),
+               "update": ("execute", "personal.memory.v1#memory.update"),
+               "review": ("execute", "personal.memory.v1#memory.review")},
+    "proposal": {"list": ("read", "personal.context.v1#proposals"),
+                 "inspect": ("execute", "personal.context.v1#proposal.inspect"),
+                 "approve": ("execute", "personal.context.v1#proposal.approve"),
+                 "reject": ("execute", "personal.context.v1#proposal.reject"),
+                 "authorize-obsidian": ("execute", "knowledge.obsidian.v1#note.authorize"),
+                 "apply-obsidian": ("execute", "knowledge.obsidian.v1#note.apply")},
+}
 
 
 def _read_input(path: str) -> dict[str, Any]:
@@ -78,6 +98,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OBSIDIAN_BINDING_ID,
         help="Profile Workspace resource binding id",
     )
+    for action in WORKSPACE_COMMANDS["proposal"]:
+        command = proposal_sub.add_parser(action)
+        command.add_argument("--input", required=action != "list", help="JSON file or - for stdin")
+    for group in ("context", "people", "memory"):
+        group_parser = sub.add_parser(group)
+        actions = group_parser.add_subparsers(dest="workspace_action", required=True)
+        for action in WORKSPACE_COMMANDS[group]:
+            command = actions.add_parser(action)
+            command.add_argument("--input", required=action != "list", help="JSON file or - for stdin")
     return parser
 
 
@@ -89,16 +118,23 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.write(dump_json(response))
             return code
         paths = PersonaPaths.resolve()
+        action = args.kind if args.command == "proposal" else getattr(args, "workspace_action", None)
+        route = WORKSPACE_COMMANDS.get(args.command, {}).get(action)
+        if route:
+            operation, ref = route
+            code, response = handle_request({"schema_version": "opl-package-app-contribution-request.v1",
+                                            "operation": operation, "ref": ref,
+                                            "input": _read_input(args.input) if args.input else {}})
+            sys.stdout.write(dump_json(response))
+            return code
         if args.command == "doctor":
             result = paths.doctor()
         elif args.command == "workspace-init":
-            result = paths.init_workspace()
+            with workspace_lock(paths):
+                result = paths.init_workspace()
         elif args.command == "setup":
-            result = (
-                paths.setup_status()
-                if args.setup_handler == "status"
-                else paths.init_workspace()
-            )
+            with workspace_lock(paths):
+                result = paths.setup_status() if args.setup_handler == "status" else paths.init_workspace()
             result = {"ok": True, "setup": result}
         elif args.command == "binding":
             if args.binding_handler == "list":
@@ -115,15 +151,16 @@ def main(argv: list[str] | None = None) -> int:
                 resource = Path(args.path).expanduser().resolve()
                 if not resource.is_dir():
                     raise ValueError(f"binding path must be an existing directory: {resource}")
-                binding = set_resource_binding(
-                    paths.workspace,
-                    binding_id=args.binding_id,
-                    capability_id=args.capability_id,
-                    provider_id=args.provider,
-                    resource_ref=resource.as_uri(),
-                    scopes=tuple(dict.fromkeys(args.scope)),
-                    policy={"approval_required": True},
-                )
+                with workspace_lock(paths):
+                    binding = set_resource_binding(
+                        paths.workspace,
+                        binding_id=args.binding_id,
+                        capability_id=args.capability_id,
+                        provider_id=args.provider,
+                        resource_ref=resource.as_uri(),
+                        scopes=tuple(dict.fromkeys(args.scope)),
+                        policy={"approval_required": True},
+                    )
                 result = {"ok": True, "binding": binding.to_dict()}
         elif args.kind == "publication":
             result = build_publication_proposals(_read_input(args.input))
@@ -140,8 +177,10 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.path),
                 binding_id=args.binding,
             )
+        if args.command == "proposal":
+            result = ProposalStore(paths).persist_bundle(result)
         sys.stdout.write(dump_json(result))
         return 0
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
         sys.stderr.write(f"opl-persona: {exc}\n")
         return 2

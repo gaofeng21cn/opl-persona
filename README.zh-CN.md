@@ -29,6 +29,18 @@ OPL Persona 让邮件、个人知识、专业背景和公开工作之间保持�
 Persona 是判断与协调层，不是邮件客户端，不是第二个 Obsidian 知识库，也不是网站内容管理
 系统。
 
+工作空间提供学术邮件、技术备忘录、学术网站和科研写作四种可调用工作模式。人物与跨来源
+证据记忆可审核；Context 只组装 approved 记忆，管理视图默认显示候选，也能审阅 forgotten
+条目。邮件记忆仅通过 Relay 的公开能力包 ABI 读取，不访问其数据库。分诊、捕获和笔记提案
+跨 CLI 调用持久化；查看、批准和拒绝绑定精确 digest。Obsidian 应用需要独立、明确确认的
+资源授权，返回持久化的真实 readback；批准提案不授权发信或发布。
+
+`context list/select/update`、`people list/update`、`memory list/update/review` 和
+`proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian` 共用 JSON 合同
+（`--input <文件或->`）。并发 CLI 写入共用跨平台锁与 data/persona 内的原子保存。Studio
+视图声明挂载于现有 settings.section slot；read model 提供本地化工作模式、动作表单和
+绑定 digest 的行级输入。
+
 ## 分身工作空间
 
 每个数字分身对应一个由用户拥有的 **分身工作空间（Profile Workspace）**。它保存这个人的
