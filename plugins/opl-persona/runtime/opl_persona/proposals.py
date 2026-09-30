@@ -7,9 +7,15 @@ import json
 from typing import Any
 
 from .approvals import APPROVAL_SCHEMA_VERSION, approve_proposal, proposal_digest
-from .bindings import binding_file_root, load_resource_binding
+from .bindings import binding_file_root, list_resource_bindings, load_resource_binding
 from .inbox import InboxStore
-from .obsidian_apply import apply_approved_obsidian_note
+from .obsidian_apply import (
+    _digest_bytes,
+    _proposal_identity,
+    _resolve_target,
+    apply_approved_obsidian_note,
+    render_obsidian_note,
+)
 from .paths import PersonaPaths
 from .workspace import atomic_json, now, refs, text, workspace_lock
 
@@ -52,6 +58,59 @@ class ProposalStore:
     def inspect(self, proposal_id: str) -> dict[str, Any]:
         with workspace_lock(self.paths):
             return copy.deepcopy(self._item(self._load(), proposal_id))
+
+    def preview(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Project review content without persisting source text or granting writes."""
+        proposal = item["proposal"]
+        payload = proposal["payload"]
+        body = next((payload[key] for key in ("body", "body_context", "summary", "abstract")
+                     if isinstance(payload.get(key), str) and payload[key].strip()), None)
+        preview = {
+            "title": item["title"], "target": proposal.get("target_path") or proposal["target"],
+            "body": body or json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2),
+            "before": None, "after": copy.deepcopy(payload), "evidence_refs": list(item["source_refs"]),
+        }
+        if proposal["proposal_kind"] == "knowledge.obsidian.note.v1":
+            try:
+                validated = _proposal_identity(proposal)
+                preview["after"] = render_obsidian_note(validated).decode("utf-8")
+                preview["before"] = self._obsidian_before(item, validated)
+            except (OSError, ValueError, KeyError):
+                preview["after"] = None
+        return preview
+
+    def _obsidian_before(self, item: dict[str, Any], payload: dict[str, Any]) -> str | None:
+        if item["proposal"]["operation"] != "update":
+            return None
+        try:
+            bindings = {identifier: binding for identifier, binding in list_resource_bindings(self.paths.workspace).items()
+                        if binding.provider_id == "obsidian" and binding.capability_id in {
+                            "knowledge.obsidian.v1", "knowledge.documents.v1"}}
+            authorization = item.get("external_approval")
+            if isinstance(authorization, dict):
+                binding = bindings.get(authorization.get("binding_id"))
+                if binding is None or any(authorization.get(key) != expected for key, expected in {
+                    "proposal_id": item["id"], "proposal_digest": item["proposal_digest"],
+                    "provider_id": binding.provider_id, "capability_id": binding.capability_id,
+                    "resource_ref": binding.resource_ref,
+                }.items()):
+                    return None
+            elif len(bindings) == 1:
+                binding = next(iter(bindings.values()))
+            else:
+                return None
+            root = binding_file_root(binding, provider_id="obsidian", capability_ids={
+                "knowledge.obsidian.v1", "knowledge.documents.v1"}, required_scope="notes.read")
+            target = _resolve_target(root, payload["target_path"])
+            if not target.is_file():
+                return None
+            content = target.read_bytes()
+            # A changed authority is not the proposal's known before-state.
+            if _digest_bytes(content) != payload["expected_digest"]:
+                return None
+            return content.decode("utf-8")
+        except (OSError, ValueError, KeyError):
+            return None
 
     def persist_bundle(self, bundle: dict[str, Any]) -> dict[str, Any]:
         proposals = bundle.get("proposals")

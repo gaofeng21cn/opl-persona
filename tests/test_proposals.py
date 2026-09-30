@@ -1,13 +1,20 @@
 import copy
+import hashlib
 import json
 
 import pytest
 
 from opl_persona.app_contributions import REQUEST_SCHEMA, handle_request
 from opl_persona.bindings import set_resource_binding
-from opl_persona.core import build_inbox_capture_proposals, build_obsidian_note_proposals
+from opl_persona.core import (
+    build_inbox_capture_proposals,
+    build_memo_proposals,
+    build_obsidian_note_proposals,
+    build_publication_proposals,
+)
 from opl_persona.inbox import InboxStore
 from opl_persona.paths import PersonaPaths
+from opl_persona.obsidian_apply import render_obsidian_note
 from opl_persona.proposals import ProposalStore
 
 
@@ -189,3 +196,151 @@ def test_app_workflow_is_persistent_and_rejects_foreign_actions(store):
     assert code == 0 and response["result"]["item"]["status"] == "rejected"
     code, response = execute("communications.mail.v1#send", {"proposal_id": item["id"]})
     assert code == 2 and response["ok"] is False
+
+
+def read_proposals(value=None):
+    code, response = handle_request({"schema_version": REQUEST_SCHEMA, "operation": "read",
+                                     "ref": "personal.context.v1#proposals", "input": value or {}})
+    assert code == 0, response
+    return response["result"]["data"]
+
+
+def update_note(store, before):
+    return propose(store, note_input() | {"operation": "update",
+        "expected_digest": "sha256:" + hashlib.sha256(before).hexdigest()})
+
+
+def test_note_preview_shows_actual_rendered_after_and_unknown_before_without_granting_authority(store):
+    item = propose(store)
+    persisted = store.path.read_bytes()
+    data = read_proposals()
+    row = data["items"][0]
+    assert row["preview"] == {
+        "title": "New note", "target": "Research/new-note.md", "body": note_input()["body"],
+        "before": None, "after": render_obsidian_note(item["proposal"]["payload"]).decode("utf-8"),
+        "evidence_refs": ["source://research/1"],
+    }
+    assert row["approval"]["external_write_allowed"] is False
+    assert "external_approval" not in row
+    assert store.path.read_bytes() == persisted
+    for action in row["actions"][1:]:
+        assert action["input"] == {"proposal_id": item["id"], "expected_digest": item["proposal_digest"]}
+    assert not any(action["action_ref"].endswith(("approve", "reject", "authorize", "apply", "inspect"))
+                   for action in data["collection_actions"])
+    create = next(action for action in data["collection_actions"] if action["action_ref"].endswith("note.propose"))
+    assert create["input"] == {"operation": "create", "expected_digest": "absent", "frontmatter": {}, "links": [], "tags": []}
+
+
+def test_update_preview_reads_only_exact_safe_bound_before_and_never_persists_it(store, tmp_path):
+    before = b"---\r\ntitle: Old note\r\n---\r\n\r\nOriginal bound content.\r\n"
+    item = update_note(store, before)
+    vault = tmp_path / "vault"
+    binding(store, vault)
+    target = vault / "Research/new-note.md"
+    target.parent.mkdir()
+    target.write_bytes(before)
+    persisted = store.path.read_bytes()
+    binding_bytes = (store.paths.data_root / "resource-bindings.json").read_bytes()
+    row = read_proposals()["items"][0]
+    assert row["preview"]["before"] == before.decode("utf-8")
+    assert row["preview"]["after"] == render_obsidian_note(item["proposal"]["payload"]).decode("utf-8")
+    assert target.read_bytes() == before
+    assert store.path.read_bytes() == persisted
+    assert (store.paths.data_root / "resource-bindings.json").read_bytes() == binding_bytes
+    assert store.inspect(item["id"])["status"] == "pending"
+
+
+@pytest.mark.parametrize("reason", ["unbound", "write_only", "missing", "stale", "symlink", "parent_symlink", "binary"])
+def test_unavailable_or_unsafe_before_is_explicit_null_and_does_not_suppress_after(store, tmp_path, reason):
+    before = b"Original synthetic content.\n" if reason != "binary" else b"\xff\xfe\x00"
+    item = update_note(store, before)
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    if reason != "unbound":
+        set_resource_binding(store.paths.workspace, binding_id="knowledge", capability_id="knowledge.obsidian.v1",
+                             provider_id="obsidian", resource_ref=vault.as_uri(),
+                             scopes=["notes.write"] if reason == "write_only" else ["notes.read"])
+    outside = tmp_path / "outside.md"
+    outside.write_bytes(before)
+    target = vault / "Research/new-note.md"
+    if reason == "parent_symlink":
+        directory = tmp_path / "outside"
+        directory.mkdir()
+        (directory / "new-note.md").write_bytes(before)
+        target.parent.symlink_to(directory, target_is_directory=True)
+    else:
+        target.parent.mkdir()
+        if reason == "symlink":
+            target.symlink_to(outside)
+        elif reason != "missing":
+            target.write_bytes(b"Changed authority content" if reason == "stale" else before)
+    persisted = store.path.read_bytes()
+    preview = read_proposals()["items"][0]["preview"]
+    assert preview["before"] is None
+    assert preview["after"] == render_obsidian_note(item["proposal"]["payload"]).decode("utf-8")
+    assert store.path.read_bytes() == persisted
+    assert outside.read_bytes() == before
+
+
+def test_preview_uses_exact_authorized_binding_and_never_guesses_between_multiple_resources(store, tmp_path):
+    before = b"Original synthetic note.\n"
+    item = update_note(store, before)
+    vault = tmp_path / "vault"
+    binding(store, vault)
+    binding(store, tmp_path / "other-vault", "other")
+    target = vault / "Research/new-note.md"
+    target.parent.mkdir()
+    target.write_bytes(before)
+    assert read_proposals()["items"][0]["preview"]["before"] is None
+    store.review(**review_input(item), decision="approved")
+    identity = {"proposal_id": item["id"], "expected_digest": item["proposal_digest"], "binding_id": "knowledge"}
+    store.authorize_obsidian(**identity, approval_ref="approval://user/external", confirmation="confirmed")
+    row = read_proposals()["items"][0]
+    assert row["preview"]["before"] == before.decode("utf-8")
+    apply = next(action for action in row["actions"] if action["action_ref"].endswith("note.apply"))
+    assert apply["input"] == identity | {"external_approval_ref": "approval://user/external"}
+    rebound = tmp_path / "rebound"
+    binding(store, rebound)
+    (rebound / "Research").mkdir()
+    (rebound / "Research/new-note.md").write_bytes(before)
+    assert read_proposals()["items"][0]["preview"]["before"] is None
+    assert target.read_bytes() == before
+
+
+def test_non_note_previews_expose_semantic_payload_and_evidence_not_invented_before(store):
+    store.persist_bundle(build_inbox_capture_proposals(capture_input()))
+    store.persist_bundle(build_publication_proposals({"publication_id": "publication:synthetic", "title": "Synthetic paper",
+        "abstract": "The proposed abstract.", "venue": "Synthetic journal", "source_refs": ["source://paper/1"]}))
+    store.persist_bundle(build_memo_proposals({"memo_id": "memo:synthetic", "title": "Synthetic memo",
+        "body": "# The proposed memo", "source_refs": ["source://memo/1"]}))
+    rows = read_proposals()["items"]
+    assert len(rows) == 5
+    for row in rows:
+        preview = row["preview"]
+        assert preview["target"] == row["proposal"]["target"]
+        assert preview["evidence_refs"] == row["source_refs"]
+        assert preview["before"] is None
+        assert preview["after"] == row["proposal"]["payload"]
+        assert preview["body"] in {"Bounded summary", "The proposed abstract.", "# The proposed memo"}
+
+
+def test_proposal_search_filters_the_complete_payload_collection_before_paging_and_previews_only_the_page(store, monkeypatch):
+    proposals = [build_obsidian_note_proposals(note_input() | {"target_path": f"Research/note-{index}.md",
+        "body": "# Late searchable body" if index >= 60 else "# Earlier body"})["proposals"][0] for index in range(65)]
+    stored = store.persist_bundle({"proposals": proposals})["stored_items"]
+    store.review(**review_input(stored[60]), decision="rejected")
+    calls = []
+    original = ProposalStore.preview
+    def preview(self, item):
+        calls.append(item["id"])
+        return original(self, item)
+    monkeypatch.setattr(ProposalStore, "preview", preview)
+    data = read_proposals({"query": "LATE SEARCHABLE", "status": "pending", "offset": 1, "limit": 2})
+    assert [row["id"] for row in data["items"]] == [stored[62]["id"], stored[63]["id"]]
+    assert data["pagination"] == {"offset": 1, "limit": 2, "total": 4, "has_more": True}
+    assert calls == [stored[62]["id"], stored[63]["id"]]
+    calls.clear()
+    empty = read_proposals({"query": "Late searchable", "status": "pending", "offset": 4, "limit": 2})
+    assert empty["items"] == [] and empty["pagination"]["total"] == 4 and not empty["pagination"]["has_more"]
+    assert calls == []
+    assert empty["collection_actions"] == data["collection_actions"]

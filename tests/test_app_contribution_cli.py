@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from uuid import UUID
 import pytest
 
 from opl_persona.app_contributions import (
@@ -12,10 +13,12 @@ from opl_persona.app_contributions import (
     DATA_CONTRACTS,
     REQUEST_SCHEMA,
     RESPONSE_SCHEMA,
+    handle_request,
 )
 from opl_persona.cli import main
 from opl_persona.inbox import InboxStore
 from opl_persona.paths import PersonaPaths
+from opl_persona.workspace import WorkspaceStore
 
 from relay_v2 import mail_assessment, relay_v2_evidence
 
@@ -27,6 +30,8 @@ PLUGIN_ROOT = ROOT / "plugins" / "opl-persona"
 @pytest.fixture(autouse=True)
 def isolated_profile(monkeypatch, tmp_path):
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
+    monkeypatch.setattr("opl_persona.workspace.relay_read", lambda ref, value, paths: {
+        "state": "ready", "items": [], "package_id": "opl-relay", "ref": ref})
 
 
 def run_cli(monkeypatch, capsys, request: object) -> tuple[int, dict]:
@@ -112,6 +117,8 @@ def test_read_projects_active_persona_context_refs_only(
         "count": 1,
         "source_policy": "persona_private_refs_only",
         "command_inputs": {},
+        "collection_actions": [],
+        "pagination": {"offset": 0, "limit": 50, "total": 1, "has_more": False},
     }
     assert "body" not in result["data"]["items"][0]
 
@@ -383,3 +390,156 @@ def test_installed_carrier_wrapper_serves_abi_without_the_source_checkout(tmp_pa
     assert response["ref"] == request["ref"]
     assert response["result"]["execution_policy"] == "proposal_only"
     assert response["result"]["proposal_bundle"]["proposals"][0]["target"] == "personal.inbox.v1"
+    result = subprocess.run(
+        [str(wrapper), "--json", "app-contribution"], cwd=tmp_path, env=environment,
+        input=json.dumps({"schema_version": REQUEST_SCHEMA, "operation": "read",
+                          "ref": "personal.context.v1#proposals", "input": {"query": "memo", "offset": 0, "limit": 1}}),
+        text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    response = json.loads(result.stdout)
+    data = response["result"]["data"]
+    assert response["result"]["input_schema"]["limit"]["type"] == "integer"
+    assert data["pagination"] == {"offset": 0, "limit": 1, "total": 1, "has_more": False}
+    assert data["items"][0]["preview"]["body"] == "A memo ready for review."
+    assert data["items"][0]["preview"]["before"] is None
+    assert len(data["collection_actions"]) == 3
+
+
+def read_collection(ref, value=None):
+    code, response = handle_request({"schema_version": REQUEST_SCHEMA, "operation": "read",
+                                     "ref": ref, "input": value or {}})
+    assert code == 0, response
+    return response["result"]
+
+
+@pytest.mark.parametrize("ref", DATA_CONTRACTS)
+def test_every_collection_declares_filters_pagination_and_explicit_collection_actions(ref):
+    result = read_collection(ref)
+    schema = result["input_schema"]
+    assert schema == DATA_CONTRACTS[ref]["input"]
+    assert schema["query"]["type"] == schema["status"]["type"] == "string"
+    assert schema["offset"] == {"type": "integer", "required": False, "minimum": 0, "default": 0}
+    assert schema["limit"] == {"type": "integer", "required": False, "minimum": 1, "default": 50}
+    data = result["data"]
+    assert data["pagination"] == {"offset": 0, "limit": 50, "total": len(data["items"]), "has_more": False}
+    for action in data["collection_actions"]:
+        assert set(action) == {"action_ref", "input", "label_i18n"}
+        assert action["input"] == data["command_inputs"][action["action_ref"]]["defaults"]
+        assert set(action["label_i18n"]) == {"zh-CN", "en-US"}
+        assert not action["action_ref"].endswith(("approve", "reject", "review", "inspect", "apply", "authorize", "select"))
+
+
+@pytest.mark.parametrize("ref", DATA_CONTRACTS)
+@pytest.mark.parametrize("field,value", [
+    ("offset", -1), ("offset", True), ("offset", 0.5), ("offset", "0"),
+    ("limit", 0), ("limit", False), ("limit", 1.5), ("limit", "1"),
+])
+def test_collection_pagination_rejects_non_integer_or_out_of_range_inputs(ref, field, value):
+    code, response = handle_request({"schema_version": REQUEST_SCHEMA, "operation": "read", "ref": ref,
+                                     "input": {field: value}})
+    assert code == 2
+    assert f"input.{field} must be an integer" in response["error"]["message"]
+
+
+def test_inbox_search_and_status_filter_precede_pagination_over_the_complete_collection():
+    store = InboxStore.from_paths(PersonaPaths.resolve())
+    for index in range(65):
+        item = store.capture(capture_id=f"capture:{index}", item_kind="note", title=f"Note {index}",
+                             summary="Late matching entry" if index >= 60 else "Earlier entry",
+                             source_refs=[f"source://research/{index}"])
+        if index == 64:
+            store.route(item.item_id, "proposal://done/64", status="consumed")
+    ref = "personal.inbox.v1#recent"
+    default = read_collection(ref)["data"]
+    assert default["count"] == 50
+    assert default["pagination"] == {"offset": 0, "limit": 50, "total": 65, "has_more": True}
+    filtered = read_collection(ref, {"query": "LATE MATCHING", "status": "staged", "offset": 2, "limit": 1})["data"]
+    assert filtered["items"][0]["capture_id"] == "capture:62"
+    assert filtered["pagination"] == {"offset": 2, "limit": 1, "total": 4, "has_more": True}
+    last = read_collection(ref, {"query": "Late matching", "status": "staged", "offset": 3, "limit": 1})["data"]
+    assert last["pagination"]["has_more"] is False
+    empty = read_collection(ref, {"query": "Late matching", "status": "staged", "offset": 50, "limit": 1})["data"]
+    assert empty["items"] == [] and empty["count"] == 0
+    assert empty["pagination"] == {"offset": 50, "limit": 1, "total": 4, "has_more": False}
+    assert empty["collection_actions"] == default["collection_actions"]
+    assert read_collection("personal.context.v1#today", {"query": "Late matching", "status": "all"})["data"]["pagination"]["total"] == 4
+    assert read_collection(ref, {"query": "source://research/64"})["data"]["pagination"]["total"] == 1
+    assert read_collection(ref, {"query": ""})["data"]["pagination"]["total"] == 65
+
+
+@pytest.mark.parametrize("collection,action_ref,fields", [
+    ("people", "personal.memory.v1#person.update", {"display_name": "Researcher",
+        "summary": "Synthetic relationship", "aliases": []}),
+    ("memories", "personal.memory.v1#memory.update", {"title": "Research memory",
+        "summary": "Synthetic context", "memory_kind": "fact", "person_ids": [], "context_ids": []}),
+])
+def test_create_action_stays_available_with_same_ref_row_updates_and_empty_pages(collection, action_ref, fields):
+    ref = f"personal.memory.v1#{collection}"
+    create = read_collection(ref)["data"]["collection_actions"]
+    identity = "person_id" if collection == "people" else "memory_id"
+    generated = create[0]["input"][identity]
+    assert str(UUID(generated)) == generated
+    assert not WorkspaceStore().path.exists()
+    code, response = handle_request({"schema_version": REQUEST_SCHEMA, "operation": "execute", "ref": action_ref,
+                                     "input": create[0]["input"] | fields | {"source_refs": ["source://synthetic"]}})
+    assert code == 0, response
+    data = read_collection(ref)["data"]
+    assert data["collection_actions"][0]["action_ref"] == action_ref
+    assert data["collection_actions"][0]["input"]["expected_digest"] == "absent"
+    assert data["collection_actions"][0]["input"][identity] != generated
+    row_action = data["items"][0]["actions"][0]
+    assert row_action["action_ref"] == create[0]["action_ref"] == action_ref
+    assert row_action["input"]["expected_digest"] == data["items"][0]["digest"]
+    assert row_action["input"][identity] == data["items"][0]["id"] == generated
+    assert create[0]["input"]["expected_digest"] == "absent"
+    for value in ({"query": "no-match"}, {"offset": 100}):
+        filtered = read_collection(ref, value)["data"]
+        assert filtered["items"] == []
+        assert filtered["collection_actions"][0]["action_ref"] == action_ref
+        assert filtered["collection_actions"][0]["input"]["expected_digest"] == "absent"
+    assert len(WorkspaceStore().list(collection)) == 1
+
+
+def test_people_search_combines_local_and_relay_projection_before_pagination_without_external_actions(monkeypatch):
+    store = WorkspaceStore()
+    store.update_person(person_id="local:one", display_name="Local researcher", summary="Synthetic relationship",
+                        aliases=["共同比较"], source_refs=["source://local"], expected_digest="absent")
+    monkeypatch.setattr("opl_persona.workspace.relay_read", lambda ref, value, paths: {
+        "state": "ready", "package_id": "opl-relay", "ref": ref,
+        "items": [{"id": "external", "display_name": "共同比较 Researcher", "source_refs": ["source://relay"],
+                   "actions": [{"action_ref": "communications.mail.v1#send"}]}]})
+    data = read_collection("personal.memory.v1#people", {"query": "共同比较", "offset": 1, "limit": 1})["data"]
+    assert data["pagination"] == {"offset": 1, "limit": 1, "total": 2, "has_more": False}
+    assert data["items"][0]["id"] == "relay:external"
+    assert data["items"][0]["owner_package_id"] == "opl-relay"
+    assert data["items"][0]["source_refs"] == ["source://relay"]
+    assert data["items"][0]["actions"] == []
+    assert not store.path.parent.joinpath("relay").exists()
+
+
+def test_memory_filters_do_not_change_approved_only_working_context(monkeypatch):
+    store = WorkspaceStore()
+    for status in ("approved", "candidate", "forgotten"):
+        item = store.update_memory(memory_id=f"memory:{status}", title=f"Research {status}", summary=f"Context {status}",
+            memory_kind="fact", person_ids=[], context_ids=[], source_refs=[f"source://{status}"], expected_digest="absent")
+        if status != "candidate":
+            store.review_memory(memory_id=item["id"], status=status, approval_ref=f"approval://user/{status}", expected_digest=item["digest"])
+    monkeypatch.setattr("opl_persona.workspace.relay_read", lambda ref, value, paths: {
+        "state": "ready", "package_id": "opl-relay", "ref": ref,
+        "items": [{"id": status, "title": f"Relay research {status}", "summary": f"Relay {status}",
+                   "status": status, "source_refs": [f"source://relay/{status}"]} for status in ("approved", "candidate", "forgotten")]})
+    data = read_collection("personal.memory.v1#memories", {"query": "research", "offset": 2, "limit": 1})["data"]
+    assert data["pagination"] == {"offset": 2, "limit": 1, "total": 4, "has_more": True}
+    assert data["memory_policy"] == "approved_only_for_context"
+    all_items = read_collection("personal.memory.v1#memories", {"status": "all"})["data"]["items"]
+    assert len(all_items) == 6
+    candidates = read_collection("personal.memory.v1#memories", {"status": "candidate"})["data"]
+    assert {item["id"] for item in candidates["items"]} == {"memory:candidate", "relay:candidate"}
+    contexts = read_collection("personal.context.v1#contexts", {"query": "科研", "offset": 0, "limit": 1})["data"]
+    assert contexts["items"][0]["id"] == "research-writing"
+    active = contexts["active_context"]
+    assert [item["id"] for item in active["memories"]] == ["memory:approved"]
+    assert [item["id"] for item in active["mail_memories"]] == ["relay:approved"]
+    assert active["external_write_allowed"] is False
+    assert all("candidate" not in ref and "forgotten" not in ref for ref in active["source_refs"])

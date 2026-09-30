@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 from .core import (
     build_inbox_capture_proposals,
@@ -55,6 +57,22 @@ DATA_CONTRACTS: dict[str, dict[str, Any]] = {
         "result": "personal.inbox.v1#recent.result",
     },
 }
+
+COLLECTION_STATUSES = {
+    "personal.context.v1#today": ("active", ["active", "staged", "routed", "all"]),
+    "personal.context.v1#proposals": ("all", ["all", "pending", "approved", "rejected", "applied"]),
+    "personal.context.v1#contexts": ("all", ["all"]),
+    "personal.memory.v1#people": ("all", ["all"]),
+    "personal.memory.v1#memories": ("active", ["active", "approved", "candidate", "forgotten", "all"]),
+    "personal.inbox.v1#recent": ("all", ["all", "active", "staged", "routed", "consumed", "discarded"]),
+}
+for _ref, (_default_status, _statuses) in COLLECTION_STATUSES.items():
+    DATA_CONTRACTS[_ref]["input"].update({
+        "query": {"type": "string", "required": False, "allow_empty": True, "default": ""},
+        "status": {"type": "string", "required": False, "enum": _statuses, "default": _default_status},
+        "offset": {"type": "integer", "required": False, "minimum": 0, "default": 0},
+        "limit": {"type": "integer", "required": False, "minimum": 1, "default": 50},
+    })
 
 ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
     "personal.context.v1#proposal.inspect": {
@@ -251,7 +269,7 @@ def _validate_input(value: dict[str, object], contract: dict[str, Any]) -> None:
         field_value = value[name]
         field_type = schema["type"]
         if field_type == "string":
-            if not isinstance(field_value, str) or not field_value.strip():
+            if not isinstance(field_value, str) or (not field_value.strip() and not schema.get("allow_empty")):
                 raise ValueError(f"input.{name} must be a non-empty string")
             allowed = schema.get("enum")
             if allowed is not None and field_value not in allowed:
@@ -265,6 +283,9 @@ def _validate_input(value: dict[str, object], contract: dict[str, Any]) -> None:
         elif field_type == "object":
             if not isinstance(field_value, dict):
                 raise ValueError(f"input.{name} must be an object")
+        elif field_type == "integer":
+            if type(field_value) is not int or field_value < schema["minimum"]:
+                raise ValueError(f"input.{name} must be an integer >= {schema['minimum']}")
         else:
             raise ValueError(f"input.{name} has an unsupported contract type")
 
@@ -283,11 +304,43 @@ VIEW_ACTIONS = {
 }
 
 
+CREATE_DEFAULTS = {
+    "personal.memory.v1#person.update": {"expected_digest": "absent", "aliases": []},
+    "personal.memory.v1#memory.update": {"expected_digest": "absent", "person_ids": [], "context_ids": []},
+    "personal.inbox.v1#capture.propose": {"item_kind": "note"},
+    "knowledge.obsidian.v1#note.propose": {
+        "operation": "create", "expected_digest": "absent", "frontmatter": {}, "links": [], "tags": [],
+    },
+}
+COLLECTION_ACTIONS = {
+    "personal.context.v1#today": [],
+    "personal.context.v1#contexts": [],
+    "personal.memory.v1#people": [
+        ("personal.memory.v1#person.update", {"zh-CN": "新建人物", "en-US": "New person"}),
+    ],
+    "personal.memory.v1#memories": [
+        ("personal.memory.v1#memory.update", {"zh-CN": "新建记忆", "en-US": "New memory"}),
+    ],
+    "personal.inbox.v1#recent": [
+        ("personal.inbox.v1#capture.propose", {"zh-CN": "新建收集项", "en-US": "New capture"}),
+    ],
+    "personal.context.v1#proposals": [
+        ("communications.mail.v1#triage.propose", {"zh-CN": "邮件分流提案", "en-US": "Mail triage proposal"}),
+        ("personal.inbox.v1#capture.propose", {"zh-CN": "收集项提案", "en-US": "Capture proposal"}),
+        ("knowledge.obsidian.v1#note.propose", {"zh-CN": "笔记提案", "en-US": "Note proposal"}),
+    ],
+}
+
+
 def command_inputs(ref: str) -> dict[str, object]:
-    return {action_ref: {"input_schema": ACTION_CONTRACTS[action_ref]["input"],
-                         "defaults": {"expected_digest": "absent"} if action_ref in {
-                             "personal.memory.v1#person.update", "personal.memory.v1#memory.update"} else {}}
-            for action_ref in VIEW_ACTIONS[ref]}
+    forms = {action_ref: {"input_schema": ACTION_CONTRACTS[action_ref]["input"],
+                         "defaults": copy.deepcopy(CREATE_DEFAULTS.get(action_ref, {}))}
+             for action_ref in VIEW_ACTIONS[ref]}
+    for action_ref, identity in (("personal.memory.v1#person.update", "person_id"),
+                                 ("personal.memory.v1#memory.update", "memory_id")):
+        if action_ref in forms:
+            forms[action_ref]["defaults"][identity] = str(uuid4())
+    return forms
 
 
 def _row_action(ref: str, value: dict[str, object], label_i18n: dict[str, str] | None = None) -> dict[str, object]:
@@ -299,6 +352,47 @@ def _row_action(ref: str, value: dict[str, object], label_i18n: dict[str, str] |
     return action
 
 
+def _search_text(value: object) -> str:
+    if isinstance(value, dict):
+        return "\n".join(_search_text(item) for item in value.values())
+    if isinstance(value, list):
+        return "\n".join(_search_text(item) for item in value)
+    return value if isinstance(value, str) else ""
+
+
+def _collection_data(ref: str, items: list[dict[str, Any]], value: dict[str, Any]) -> dict[str, Any]:
+    schema = DATA_CONTRACTS[ref]["input"]
+    status = value.get("status", schema["status"]["default"])
+    if status == "active":
+        active = {"approved", "candidate"} if ref == "personal.memory.v1#memories" else {"staged", "routed"}
+        items = [item for item in items if item.get("status") in active]
+    elif status != "all":
+        items = [item for item in items if item.get("status") == status]
+    query = value.get("query", "").strip().casefold()
+    if query:
+        def matches(item: dict[str, Any]) -> bool:
+            fields = {key: item[key] for key in (
+                "id", "item_id", "capture_id", "title", "summary", "display_name", "aliases", "label_i18n",
+                "summary_i18n", "guidance", "memory_kind", "person_ids", "context_ids", "source_refs",
+            ) if key in item}
+            proposal = item.get("proposal", {})
+            fields.update({key: proposal[key] for key in ("payload", "target", "target_path", "proposal_kind") if key in proposal})
+            return query in _search_text(fields).casefold()
+        items = [item for item in items if matches(item)]
+    offset = value.get("offset", schema["offset"]["default"])
+    limit = value.get("limit", schema["limit"]["default"])
+    total = len(items)
+    page = items[offset:offset + limit]
+    forms = command_inputs(ref)
+    return {
+        "items": page, "count": len(page),
+        "pagination": {"offset": offset, "limit": limit, "total": total, "has_more": offset + len(page) < total},
+        "collection_actions": [_row_action(action_ref, copy.deepcopy(forms[action_ref]["defaults"]), labels)
+                               for action_ref, labels in COLLECTION_ACTIONS[ref]],
+        "command_inputs": forms,
+    }
+
+
 MEMORY_REVIEW_LABELS = {
     "approved": {"zh-CN": "确认记忆", "en-US": "Confirm memory"},
     "candidate": {"zh-CN": "保留候选", "en-US": "Keep candidate"},
@@ -306,7 +400,7 @@ MEMORY_REVIEW_LABELS = {
 }
 
 
-def _proposal_row(item: dict[str, Any], bindings: list[dict[str, Any]]) -> dict[str, Any]:
+def _proposal_row(item: dict[str, Any], bindings: list[dict[str, Any]], store: ProposalStore) -> dict[str, Any]:
     identity = {"proposal_id": item["id"], "expected_digest": item["proposal_digest"]}
     actions = [_row_action("personal.context.v1#proposal.inspect", {"proposal_id": item["id"]})]
     if item["status"] == "pending":
@@ -318,7 +412,7 @@ def _proposal_row(item: dict[str, Any], bindings: list[dict[str, Any]]) -> dict[
         if isinstance(authorization, dict):
             actions.append(_row_action("knowledge.obsidian.v1#note.apply", identity | {
                 "binding_id": authorization["binding_id"], "external_approval_ref": authorization["approval_ref"]}))
-    return item | {"actions": actions}
+    return item | {"actions": actions, "preview": store.preview(item)}
 
 
 def _relay_projection(evidence: dict[str, Any], collection: str) -> list[dict[str, Any]]:
@@ -354,7 +448,9 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
         except FileNotFoundError:
             bindings = []
         data["bindings"] = bindings
-        items = [_proposal_row(item, bindings) for item in ProposalStore().list()]
+        proposals = ProposalStore(store.paths)
+        data.update(_collection_data(ref, proposals.list(), value))
+        data["items"] = [_proposal_row(item, bindings, proposals) for item in data["items"]]
     elif ref == "personal.context.v1#contexts":
         items = []
         for item in store.list("contexts"):
@@ -382,11 +478,8 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
         items += _relay_projection(relay, "people")
         data["relay"] = {key: item for key, item in relay.items() if key != "items"}
     else:
-        status = value.get("status", "active")
         items = []
-        for item in store.list("memories", status=None if status in {"all", "active"} else status):
-            if status == "active" and item["status"] == "forgotten":
-                continue
+        for item in store.list("memories"):
             fields = {key: item[key] for key in ("title", "summary", "memory_kind", "person_ids", "context_ids", "source_refs")}
             fields.update(memory_id=item["id"], expected_digest=item["digest"])
             actions = [_row_action("personal.memory.v1#memory.update", fields)]
@@ -394,19 +487,16 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
                         "expected_digest": item["digest"]}, MEMORY_REVIEW_LABELS[decision])
                         for decision in ("approved", "candidate", "forgotten") if decision != item["status"]]
             items.append(item | {"owner_package_id": "opl-persona", "actions": actions})
-        relay = store.relay("search", status=status)
-        relay_items = _relay_projection(relay, "memories")
-        items += [item for item in relay_items if status in {"all", "active"} or item["status"] == status]
+        relay = store.relay("search")
+        items += _relay_projection(relay, "memories")
         data["relay"] = {key: item for key, item in relay.items() if key != "items"}
         data["memory_policy"] = "approved_only_for_context"
-    data.update(items=items, count=len(items), command_inputs=command_inputs(ref))
-    if ref == "personal.context.v1#proposals" and len(data["bindings"]) == 1:
-        for action in ("knowledge.obsidian.v1#note.authorize", "knowledge.obsidian.v1#note.apply"):
-            data["command_inputs"][action]["defaults"]["binding_id"] = data["bindings"][0]["binding_id"]
+    if ref != "personal.context.v1#proposals":
+        data.update(_collection_data(ref, items, value))
     return {"kind": "data", "state": "ready", "result_schema": contract["result"], "input_schema": contract["input"], "data": data}
 
 
-def _inbox_read(ref: str, contract: dict[str, Any], *, active_only: bool = False) -> dict[str, object]:
+def _inbox_read(ref: str, contract: dict[str, Any], value: dict[str, Any], *, active_only: bool = False) -> dict[str, object]:
     items = InboxStore.from_paths(PersonaPaths.resolve()).list()
     if active_only:
         items = [item for item in items if item.status in {"staged", "routed"}]
@@ -417,10 +507,8 @@ def _inbox_read(ref: str, contract: dict[str, Any], *, active_only: bool = False
         "result_schema": contract["result"],
         "input_schema": contract["input"],
         "data": {
-            "items": projected_items,
-            "count": len(projected_items),
+            **_collection_data(ref, projected_items, value),
             "source_policy": "persona_private_refs_only",
-            "command_inputs": command_inputs(ref),
         },
     }
 
@@ -518,7 +606,7 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
         _validate_input(value, contract)
         if operation == "read":
             result = (
-                _inbox_read(ref, contract, active_only=ref == "personal.context.v1#today")
+                _inbox_read(ref, contract, value, active_only=ref == "personal.context.v1#today")
                 if ref in {"personal.context.v1#today", "personal.inbox.v1#recent"}
                 else _workspace_read(ref, contract, value)
             )

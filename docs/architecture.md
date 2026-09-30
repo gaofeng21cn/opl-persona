@@ -89,6 +89,59 @@ availability is a local diagnostic in a ready Persona read model; there is no
 database fallback. Cross-source derived state lives in `data/persona/workspace.json`.
 Names and aliases alone do not automatically merge source identities.
 
+### Collection read-model
+
+All six reads declare `query`, `status`, `offset` and `limit` in their returned
+`input_schema`. Query is a case-insensitive substring search over presentation,
+identity, provenance and proposal payload fields; an empty query clears search.
+Status options are collection-specific: contexts and people have no review
+state and accept `all`; memories default to `active` (candidate and approved),
+proposals and recent Inbox default to `all`, and today retains its active Inbox
+boundary. The contexts read also retains `context_id` and `person_id` selectors.
+Filtering runs over the complete Persona collection and supplied public Relay
+evidence projection before paging, never just over the returned page. This does
+not enumerate or copy Relay's private store. Approved-only context assembly is
+independent of collection search, status filters and pagination.
+
+Offset and limit are strict integers, excluding booleans, with minima 0 and 1;
+defaults are 0 and 50. `data.pagination` is
+`{offset, limit, total, has_more}`, where total counts filtered matches before
+paging and `data.count` counts returned rows. Empty and out-of-range pages
+retain schemas, diagnostics and collection actions. Ordering follows each
+owner's existing collection order.
+
+Every collection returns explicit
+`data.collection_actions:[{action_ref,input,label_i18n}]`, including an empty
+array where no collection command applies. Only creation/proposal builders
+appear here; row inspect, review, update, select, authorize and apply remain in
+`items[].actions`. A collection create and a row update may use the same ref;
+consumers must not hide the create action because that ref occurs on a row.
+`data.command_inputs` retains declared action schemas and creation defaults.
+Person/memory creates bind a fresh response-local UUID in `person_id`/`memory_id`
+and `expected_digest="absent"`; generating these defaults creates no persisted
+record. Optional association/alias lists default to empty. Note proposals
+default to create/absent with empty frontmatter, links and tags; capture defaults
+to kind `note`. Consumers use the explicit action input over command defaults,
+keep technical identity/digest bindings out of editable user fields, and never
+replace row identity/digest with creation defaults. User review references and
+separate external confirmation remain explicit inputs, not inferred approvals.
+
+Proposal rows include
+`preview:{title,target,body,before,after,evidence_refs}`. Target is the relative
+note path or explicit owner target; body is proposed text or a structured-payload
+JSON presentation. Note after is the exact Markdown produced by the existing
+owner renderer, including frontmatter, tags, links and evidence. Other after
+values are the proposed payload object. Before is `null` unless the exact update
+target is safely readable through a compatible Obsidian `notes.read` binding
+and its bytes match the target's expected digest. A single compatible binding
+can be used before authorization; multiple bindings require the proposal's
+resource-bound external authorization to select one. Missing, unreadable,
+non-UTF-8, symlinked, stale or rebound targets remain `null`; no source reference
+is dereferenced to invent a diff. Preview is computed only for returned rows,
+never persisted, and confers no write authority. Obsidian authorize/apply still
+belongs to the existing Persona owner adapter with its independent review,
+resource binding and exact-digest checks.
+
 All CLI proposal builders and the existing three App propose actions persist
 to `data/persona/proposals.json`. Capture/triage also stage Persona-local Inbox
 captures through `inbox.py`. Replaying identical proposals preserves review
