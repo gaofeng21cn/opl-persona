@@ -1,0 +1,140 @@
+{
+  "schema_version": "opl-package-app-contribution-adapter.v1",
+  "reads": {
+    "personal.context.v1#today": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#proposals": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#contexts": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.memory.v1#people": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.memory.v1#memories": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.inbox.v1#recent": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    }
+  },
+  "actions": {
+    "personal.context.v1#proposal.inspect": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#proposal.approve": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#proposal.reject": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "communications.mail.v1#triage.propose": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.inbox.v1#capture.propose": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "knowledge.obsidian.v1#note.propose": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "knowledge.obsidian.v1#note.authorize": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "knowledge.obsidian.v1#note.apply": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#context.select": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#context.update": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.memory.v1#person.update": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.memory.v1#memory.update": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.memory.v1#memory.review": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    }
+  }
+}

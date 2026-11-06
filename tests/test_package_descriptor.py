@@ -169,10 +169,24 @@ def test_app_contribution_abi_is_package_owned_and_matches_declared_refs() -> No
     assert abi == {
         "schema_version": "opl-package-app-contribution-cli.v1",
         "transport": "stdin_json_stdout_json",
-        "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+        "argv": ["opl", "app", "contribution", "adapter", "--stdin"],
         "request_schema": "opl-package-app-contribution-request.v1",
         "response_schema": "opl-package-app-contribution-response.v1",
     }
+    assert package["codex_surface"]["app_contribution_adapter"] == {
+        "manifest": "app-contribution-adapter.json",
+    }
+    adapter = load_json(PLUGIN_ROOT / "app-contribution-adapter.json")
+    assert set(adapter["reads"]) == set(DATA_CONTRACTS)
+    assert set(adapter["actions"]) == set(ACTION_CONTRACTS)
+    for entry in [*adapter["reads"].values(), *adapter["actions"].values()]:
+        assert entry == {
+            "kind": "command",
+            "cwd": "package",
+            "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+            "stdin": "request_json",
+            "passthrough": True,
+        }
     contributions = package["app_contributions"]
     assert {view["data_ref"] for view in contributions["views"]} == set(DATA_CONTRACTS)
     assert {command["action_ref"] for command in contributions["commands"]} == set(ACTION_CONTRACTS)
