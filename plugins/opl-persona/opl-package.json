@@ -45,6 +45,7 @@
       "runtime/opl_persona/__init__.py",
       "runtime/opl_persona/approvals.py",
       "runtime/opl_persona/__main__.py",
+      "app-contribution-adapter.json",
       "runtime/opl_persona/app_contributions.py",
       "runtime/opl_persona/bindings.py",
       "runtime/opl_persona/cli.py",
@@ -59,7 +60,7 @@
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml"
     ],
-    "digest": "sha256:4e1a42fb487f81e11165b881c0a1b8715cb8c1d95b0906d3c60b205cf63abcd2"
+    "digest": "sha256:2145895de374b1b5153e8b438f00ed7558377de21e76d512b9c0ed09fe809e6f"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
@@ -77,12 +78,17 @@
       "schema_version": "opl-package-app-contribution-cli.v1",
       "transport": "stdin_json_stdout_json",
       "argv": [
-        "./bin/opl-persona",
-        "--json",
-        "app-contribution"
+        "opl",
+        "app",
+        "contribution",
+        "adapter",
+        "--stdin"
       ],
       "request_schema": "opl-package-app-contribution-request.v1",
       "response_schema": "opl-package-app-contribution-response.v1"
+    },
+    "app_contribution_adapter": {
+      "manifest": "app-contribution-adapter.json"
     }
   },
   "app_contributions": {
