@@ -14,6 +14,15 @@ because they are documented.
 
 ## Owner split
 
+Framework owns the shared Profile Workspace selector, marker and initialization
+mechanics in `python/opl_framework/profile_workspace.py`. The installed Persona
+carrier includes its byte-for-byte generated `_opl_profile_workspace.py`, so it
+requires no Framework runtime installation. Persona retains its templates,
+resource bindings and private state. Regenerate the module with Framework's
+`scripts/materialize-python-support.mjs --module profile_workspace --target
+plugins/opl-persona/runtime/opl_persona/_opl_profile_workspace.py`; run
+`OPL_FRAMEWORK_ROOT=<framework-checkout> make test` to check the projection bytes.
+
 Persona is a judgment and proposal layer. It does not become a second mail
 store, knowledge vault, or website CMS.
 

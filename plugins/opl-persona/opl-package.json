@@ -58,9 +58,10 @@
       "runtime/opl_persona/proposals.py",
       "runtime/opl_persona/workspace.py",
       "skills/opl-persona/SKILL.md",
-      "skills/opl-persona/agents/openai.yaml"
+      "skills/opl-persona/agents/openai.yaml",
+      "runtime/opl_persona/_opl_profile_workspace.py"
     ],
-    "digest": "sha256:2145895de374b1b5153e8b438f00ed7558377de21e76d512b9c0ed09fe809e6f"
+    "digest": "sha256:78e460ff430609c5b65d82c3f9c36c6c654271d44b3bbd75596934c62b101d49"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-import os
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
-WORKSPACE_SCHEMA = "opl_profile_workspace.v1"
-MARKER_NAME = ".opl-profile-workspace.json"
-PROFILE_WORKSPACE_ENV = "OPL_PROFILE_WORKSPACE"
+from ._opl_profile_workspace import (
+    MARKER_NAME,
+    PROFILE_WORKSPACE_ENV,
+    WORKSPACE_SCHEMA,
+    default_profile_workspace,
+    initialize_profile_workspace,
+)
 
 _TEMPLATES: dict[str, str] = {
     "AGENTS.md": """# Profile Workspace
@@ -55,17 +58,6 @@ _BINDING_STORE_TEMPLATE = """{
   "bindings": {}
 }
 """
-
-
-def default_profile_workspace(environ: dict[str, str] | None = None) -> Path:
-    """Return the selected Profile Workspace or the user's standard default."""
-
-    env = os.environ if environ is None else environ
-    configured = env.get(PROFILE_WORKSPACE_ENV, "").strip()
-    if configured:
-        return Path(configured).expanduser()
-    home = Path.home()
-    return home / "OPL" / "profiles" / (home.name or "default")
 
 
 @dataclass(frozen=True)
@@ -162,30 +154,7 @@ class PersonaPaths:
 
     def init_workspace(self) -> dict[str, object]:
         self.data_root.mkdir(parents=True, exist_ok=True)
-        self.workspace.mkdir(parents=True, exist_ok=True)
-        for relative in (
-            "profile",
-            "policies",
-            "context",
-            "templates",
-            "exports",
-            "data/relay",
-            "data/persona",
-        ):
-            (self.workspace / relative).mkdir(parents=True, exist_ok=True)
-        marker = self.workspace / MARKER_NAME
-        expected = '{\n  "schema": "opl_profile_workspace.v1"\n}\n'
-        if marker.exists() and marker.read_text(encoding="utf-8") != expected:
-            raise ValueError(f"workspace marker already exists with different content: {marker}")
-        marker.write_text(expected, encoding="utf-8")
-        created: list[str] = []
-        for relative, content in _TEMPLATES.items():
-            target = self.workspace / relative
-            if target.exists():
-                continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
-            created.append(relative)
+        created = initialize_profile_workspace(self.workspace, _TEMPLATES)
         bindings = self.data_root / "resource-bindings.json"
         if not bindings.exists():
             bindings.write_text(_BINDING_STORE_TEMPLATE, encoding="utf-8")
