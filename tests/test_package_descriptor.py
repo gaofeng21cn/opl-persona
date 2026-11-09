@@ -190,3 +190,37 @@ def test_app_contribution_abi_is_package_owned_and_matches_declared_refs() -> No
     contributions = package["app_contributions"]
     assert {view["data_ref"] for view in contributions["views"]} == set(DATA_CONTRACTS)
     assert {command["action_ref"] for command in contributions["commands"]} == set(ACTION_CONTRACTS)
+
+
+def test_local_install_runs_copied_carrier_without_source_checkout(tmp_path):
+    import os
+    import subprocess
+    prefix = tmp_path / "installed"
+    subprocess.run(["make", "install-local", "INSTALL_MODE=standalone", f"PREFIX={prefix}"], cwd=ROOT, check=True, capture_output=True)
+    launcher = prefix / "bin" / "opl-persona"
+    assert str(ROOT) not in launcher.read_text()
+    result = subprocess.run([str(launcher), "--json", "doctor"], check=True, capture_output=True, text=True,
+        env=os.environ | {"OPL_PROFILE_WORKSPACE": str(tmp_path / "profile")})
+    assert json.loads(result.stdout)["ok"] is True
+    assert (prefix / "share" / "opl-persona" / "runtime" / "opl_persona" / "cli.py").is_file()
+
+
+def test_native_launcher_selects_only_enabled_matching_installed_carrier(tmp_path):
+    import importlib.util
+    import pytest
+    spec = importlib.util.spec_from_file_location("persona_launcher", ROOT / "scripts" / "launch-installed-persona.py")
+    launcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(launcher)
+    config = tmp_path / "config.toml"
+    config.write_text('[plugins."opl-persona@opl-persona"]\nenabled = true\n')
+    cache = tmp_path / "plugins/cache/opl-persona/opl-persona"
+    for version, name in [("0.4.0", "opl-persona"), ("0.5.0", "foreign")]:
+        root = cache / version
+        (root / "bin").mkdir(parents=True)
+        (root / "bin/opl-persona").write_text("pass")
+        (root / "plugin.json").write_text(json.dumps({"name": name, "version": version}))
+        (root / "opl-package.json").write_text(json.dumps({"package_id": "opl-persona", "version": version}))
+    assert launcher.installed_entrypoint(tmp_path) == cache / "0.4.0/bin/opl-persona"
+    config.write_text('[plugins."opl-persona@opl-persona"]\nenabled = false\n')
+    with pytest.raises(ValueError, match="not enabled"):
+        launcher.installed_entrypoint(tmp_path)

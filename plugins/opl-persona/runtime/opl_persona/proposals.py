@@ -9,7 +9,9 @@ from typing import Any
 from .approvals import APPROVAL_SCHEMA_VERSION, approve_proposal, proposal_digest
 from .bindings import binding_file_root, list_resource_bindings, load_resource_binding
 from .inbox import InboxStore
-from .knowledge import verify_knowledge_dependencies
+from .knowledge import (verify_knowledge_dependencies, read_knowledge_source,
+                        propose_knowledge_writeback, review_knowledge_writeback, apply_knowledge_writeback,
+                        resolve_knowledge_target, register_knowledge_source)
 from .obsidian_apply import (
     _digest_bytes,
     _proposal_identity,
@@ -28,6 +30,25 @@ class ProposalStore:
     def __init__(self, paths: PersonaPaths | None = None) -> None:
         self.paths = paths or PersonaPaths.resolve()
         self.path = self.paths.data_root / "proposals.json"
+
+    def _registered_target(self, item: dict[str, Any], binding: Any) -> dict[str, Any]:
+        root = binding_file_root(binding, provider_id=binding.provider_id,
+            capability_ids={"knowledge.obsidian.v1", "knowledge.documents.v1"}, required_scope="notes.write")
+        target = _resolve_target(root, item["proposal"]["payload"]["target_path"])
+        identity = resolve_knowledge_target(target, self.paths)
+        knowledge = item["proposal"]["payload"].get("knowledge_writeback")
+        registration = item["proposal"]["payload"].get("knowledge_registration")
+        if identity["registered"] and registration and item.get("body_receipt"):
+            if identity.get("knowledge_id") != registration["item"].get("knowledge_id"):
+                raise ValueError("registered target differs from the retained create receipt")
+        elif identity["registered"]:
+            if not knowledge or knowledge["knowledge_id"] != identity.get("knowledge_id"):
+                raise ValueError("registered knowledge must use its exact Framework knowledge_writeback identity")
+            if identity.get("authorized") is not True:
+                raise ValueError("registered knowledge target is not authorized")
+        elif knowledge and not registration:
+            raise ValueError("knowledge_writeback does not identify the selected binding target")
+        return identity
 
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
@@ -101,7 +122,7 @@ class ProposalStore:
             return None
         try:
             bindings = {identifier: binding for identifier, binding in list_resource_bindings(self.paths.workspace).items()
-                        if binding.provider_id == "obsidian" and binding.capability_id in {
+                        if binding.provider_id in {"obsidian", "markdown"} and binding.capability_id in {
                             "knowledge.obsidian.v1", "knowledge.documents.v1"}}
             authorization = item.get("external_approval")
             if isinstance(authorization, dict):
@@ -116,7 +137,7 @@ class ProposalStore:
                 binding = next(iter(bindings.values()))
             else:
                 return None
-            root = binding_file_root(binding, provider_id="obsidian", capability_ids={
+            root = binding_file_root(binding, provider_id=binding.provider_id, capability_ids={
                 "knowledge.obsidian.v1", "knowledge.documents.v1"}, required_scope="notes.read")
             target = _resolve_target(root, payload["target_path"])
             if not target.is_file():
@@ -145,6 +166,21 @@ class ProposalStore:
             payload = proposal.get("payload")
             if not isinstance(payload, dict):
                 raise ValueError("proposal payload must be an object")
+            framework_proposal = None
+            if proposal["proposal_kind"] == "knowledge.obsidian.note.v1" and payload.get("knowledge_writeback"):
+                with workspace_lock(self.paths):
+                    previous = next((item for item in self._load()["items"] if item["id"] == identifier
+                        and item["proposal_digest"] == proposal_digest(proposal)), None)
+                if previous is not None:
+                    framework_proposal = previous.get("framework_proposal")
+                else:
+                    knowledge = dict(payload["knowledge_writeback"])
+                    knowledge_id = knowledge.pop("knowledge_id")
+                    source = read_knowledge_source(knowledge_id, self.paths)
+                    if source["sha256"] != payload["expected_digest"]:
+                        raise ValueError("knowledge writeback expected_digest differs from the accepted source")
+                    framework_proposal = propose_knowledge_writeback(knowledge_id, self.paths,
+                        render_obsidian_note(_proposal_identity(proposal)), source_refs=source_refs, **knowledge)
             title = payload.get("title") or proposal.get("target_path") or proposal["proposal_kind"]
             summary = payload.get("summary") or proposal.get("operation", "propose") + " -> " + proposal["target"]
             if proposal["proposal_kind"] == "knowledge.obsidian.note.v1":
@@ -156,6 +192,8 @@ class ProposalStore:
                              "source_refs": source_refs, "proposal_digest": proposal_digest(proposal),
                              "proposal": copy.deepcopy(proposal), "approval": copy.deepcopy(approval),
                              "receipt": None, "created_at": now(), "updated_at": now()})
+            if framework_proposal is not None:
+                prepared[-1]["framework_proposal"] = framework_proposal
         with workspace_lock(self.paths):
             state = self._load()
             stored = []
@@ -216,7 +254,8 @@ class ProposalStore:
             return copy.deepcopy(item)
 
     def authorize_obsidian(self, *, proposal_id: str, expected_digest: str, binding_id: str,
-                           approval_ref: str, confirmation: str) -> dict[str, Any]:
+                           approval_ref: str, confirmation: str,
+                           knowledge_review: dict[str, str] | None = None) -> dict[str, Any]:
         if confirmation != "confirmed":
             raise ValueError("external write authorization requires explicit confirmation")
         approval_ref = text(approval_ref, "approval_ref", 2048)
@@ -230,8 +269,17 @@ class ProposalStore:
             if approval_ref == item["approval"].get("approval_ref"):
                 raise ValueError("external approval must be separate from proposal review")
             binding = load_resource_binding(self.paths.workspace, binding_id)
-            binding_file_root(binding, provider_id="obsidian", capability_ids={"knowledge.obsidian.v1", "knowledge.documents.v1"},
+            binding_file_root(binding, provider_id=binding.provider_id, capability_ids={"knowledge.obsidian.v1", "knowledge.documents.v1"},
                               required_scope="notes.write")
+            framework = item.get("framework_proposal")
+            self._registered_target(item, binding)
+            if framework or item["proposal"]["payload"].get("knowledge_registration"):
+                if not isinstance(knowledge_review, dict) or set(knowledge_review) != {"reviewer", "reviewed_at", "next_review_at"}:
+                    raise ValueError("registered knowledge requires explicit reviewer, reviewed_at and next_review_at")
+                item["knowledge_review"] = copy.deepcopy(knowledge_review)
+            if framework:
+                item["framework_review"] = review_knowledge_writeback(self.paths, framework["proposal_id"],
+                    approval_ref=approval_ref, **knowledge_review)
             item["external_approval"] = {
                 "schema_version": APPROVAL_SCHEMA_VERSION, "status": "approved", "required": True,
                 "external_write_allowed": True, "approval_ref": approval_ref, "proposal_id": proposal_id,
@@ -273,7 +321,26 @@ class ProposalStore:
                 raise ValueError("external approval must authorize the exact proposal digest")
             if item["status"] == "applied":
                 raise ValueError("proposal already applied; inspect its persisted receipt")
-            receipt = apply_approved_obsidian_note(item["proposal"], external_approval, binding=binding)
+            framework = item.get("framework_proposal")
+            self._registered_target(item, binding)
+            if framework:
+                receipt = apply_knowledge_writeback(self.paths, framework["proposal_id"])
+            else:
+                # Persist the body receipt before registration.  A failed or timed-out
+                # registration can then reconcile/retry without repeating the create.
+                receipt = item.get("body_receipt")
+                if receipt is None:
+                    receipt = apply_approved_obsidian_note(item["proposal"], external_approval, binding=binding, paths=self.paths)
+                    item["body_receipt"] = receipt
+                    atomic_json(self.path, state)
+                registration = item["proposal"]["payload"].get("knowledge_registration")
+                if registration:
+                    receipt = receipt | {"knowledge_registration": register_knowledge_source(self.paths, registration,
+                        expected_sha256=receipt["readback"]["digest"], approval_ref=external_approval["approval_ref"],
+                        review=item["knowledge_review"], expected_body_path=_resolve_target(
+                            binding_file_root(binding, provider_id=binding.provider_id,
+                                capability_ids={"knowledge.obsidian.v1", "knowledge.documents.v1"}, required_scope="notes.write"),
+                            item["proposal"]["payload"]["target_path"]))}
             item["status"] = "applied"
             item["receipt"] = receipt
             item["external_approval"] = copy.deepcopy(external_approval)

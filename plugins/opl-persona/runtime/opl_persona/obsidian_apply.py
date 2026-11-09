@@ -17,6 +17,8 @@ from typing import Any, Mapping
 from .approvals import proposal_digest
 from .bindings import ResourceBinding, binding_file_root
 from .core import OBSIDIAN_NOTE_CONTRACT, build_obsidian_note_proposals
+from .paths import PersonaPaths
+from .knowledge import resolve_knowledge_target
 
 
 RECEIPT_SCHEMA_VERSION = "opl-persona-obsidian-apply-receipt.v1"
@@ -96,7 +98,7 @@ def _require_approval(proposal: Mapping[str, Any], approval: Mapping[str, Any]) 
 def _binding_vault(binding: ResourceBinding) -> Path:
     return binding_file_root(
         binding,
-        provider_id="obsidian",
+        provider_id=binding.provider_id,
         capability_ids=_CAPABILITY_IDS,
         required_scope="notes.write",
     )
@@ -136,10 +138,9 @@ def render_obsidian_note(payload: Mapping[str, Any]) -> bytes:
         raise ValueError("links must be a list of strings")
     if not isinstance(evidence_refs, list) or not all(isinstance(item, str) for item in evidence_refs):
         raise ValueError("evidence_refs must be a list of strings")
-    if tags and "tags" not in metadata:
-        metadata["tags"] = list(dict.fromkeys(item.strip() for item in tags if item.strip()))
-    if evidence_refs and "source_refs" not in metadata:
-        metadata["source_refs"] = list(dict.fromkeys(item.strip() for item in evidence_refs if item.strip()))
+    # Evidence references belong to the proposal and apply receipt.  Do not
+    # materialize them into an Obsidian note's frontmatter: Markdown bodies are
+    # user-facing source text and must remain free of Persona control metadata.
     lines: list[str] = []
     if metadata:
         lines.append("---")
@@ -215,6 +216,7 @@ def apply_approved_obsidian_note(
     approval: Mapping[str, Any],
     *,
     binding: ResourceBinding,
+    paths: PersonaPaths | None = None,
 ) -> dict[str, Any]:
     """Apply one approved note and return an authority readback receipt."""
 
@@ -222,6 +224,8 @@ def apply_approved_obsidian_note(
     _require_approval(proposal, approval)
     root = _binding_vault(binding)
     target = _resolve_target(root, _safe_target_path(payload["target_path"]))
+    if paths is not None and resolve_knowledge_target(target, paths)["registered"]:
+        raise ValueError("registered knowledge must use Framework knowledge writeback")
     operation = _required_text(proposal.get("operation"), "operation")
     expected_digest = _required_text(payload.get("expected_digest"), "expected_digest")
     exists = target.exists()
@@ -259,6 +263,8 @@ def apply_approved_obsidian_note(
         "target_path": payload["target_path"],
         "operation": operation,
         "expected_digest": expected_digest,
+        "source_refs": list(proposal["source_refs"]),
+        "tags": list(payload.get("tags", [])),
         "readback": {
             "digest": result_digest,
             "bytes": len(readback),

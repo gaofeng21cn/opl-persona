@@ -113,3 +113,12 @@ projection 只能聚合这些结果，不能从本仓文档、源码 tag 或 des
 projection 与 carrier readback 一致；OPL App 只通过通用 Capability Package projection
 呈现 Persona；所有 lifecycle action 都保持 Profile Workspace 不变。任一单项通过都不
 等于 runtime、Resource Binding、外部资源或产品 ready。
+
+
+`make install-local` installs a stable launcher for the enabled native Codex
+`opl-persona@opl-persona` plugin. It checks the Codex enablement and matching
+Plugin/Package identity and version, then executes the highest installed carrier
+version from its cache. It does not import a checkout or copy another carrier.
+An independent deployment can explicitly use `INSTALL_MODE=standalone` to copy
+the carrier under `<prefix>/share/opl-persona`. Neither mode publishes an OCI
+release; production Package updates use the Framework OCI lifecycle.

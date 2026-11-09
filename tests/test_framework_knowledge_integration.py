@@ -31,8 +31,8 @@ def test_actual_framework_roundtrip_source_change_and_revocation(tmp_path, monke
     registry = {
         "surface_kind": "opl_knowledge_source_registry", "version": "knowledge-source-registry.v2",
         "registry_id": "synthetic.owner", "owner": "synthetic.owner", "sources": [{
-            "source_id": "synthetic.notes", "root": str(source), "status": "active", "writable": False,
-            "grants": [{"workspace_root": str(workspace), "domains": ["persona"], "write_domains": [],
+            "source_id": "synthetic.notes", "root": str(source), "status": "active", "writable": True,
+            "grants": [{"workspace_root": str(workspace), "domains": ["persona"], "write_domains": ["persona"],
                         "scope_ids": ["synthetic.research"]}]}],
         "items": [{"surface_kind": "opl_durable_knowledge_item", "version": "durable-knowledge-item.v2",
             "knowledge_id": "synthetic.research.principle", "title": "Research principle", "owner": "synthetic.owner",
@@ -61,7 +61,7 @@ def test_actual_framework_roundtrip_source_change_and_revocation(tmp_path, monke
     store.review_memory(memory_id="derived", status="approved", approval_ref="review://synthetic-owner/accept",
                         expected_digest=candidate["digest"])
     assert store.context("research-writing")["memories"][0]["id"] == "derived"
-    # A separately authorized author write does not accept a new knowledge revision.
+    # An exact owner-reviewed write updates both canonical body and accepted revision.
     set_resource_binding(workspace, binding_id="authoring", capability_id="knowledge.obsidian.v1",
                          provider_id="obsidian", resource_ref=source.as_uri(), scopes=["notes.read", "notes.write"])
     proposals = ProposalStore(store.paths)
@@ -69,16 +69,16 @@ def test_actual_framework_roundtrip_source_change_and_revocation(tmp_path, monke
         "operation": "update", "target_path": note.name, "expected_digest": digest,
         "frontmatter": {}, "body": "# Changed principle\nSource requires another review.",
         "links": [], "tags": [], "evidence_refs": ["knowledge://synthetic.research.principle"],
+        "knowledge_writeback": {"knowledge_id": "synthetic.research.principle", "target_scope": {"kind": "topic", "id": "synthetic.research"}, "content_kind": "policy", "proposed_rule_or_mechanism": "Changed principle", "evidence_class": "synthetic", "review_requirement": "owner review"},
     }))["stored_items"][0]
     identity = {"proposal_id": item["id"], "expected_digest": item["proposal_digest"]}
     proposals.review(**identity, decision="approved", approval_ref="approval://synthetic/review")
-    proposals.authorize_obsidian(**identity, binding_id="authoring", approval_ref="approval://synthetic/write", confirmation="confirmed")
+    proposals.authorize_obsidian(**identity, binding_id="authoring", approval_ref="approval://synthetic/write", confirmation="confirmed", knowledge_review={"reviewer": "synthetic.owner", "reviewed_at": "2026-11-09T00:00:00Z", "next_review_at": "2099-01-01T00:00:00Z"})
     proposals.apply_obsidian(**identity, binding_id="authoring", external_approval_ref="approval://synthetic/write")
     assert "Changed principle" in note.read_text()
-    assert json.loads(registry_path.read_text())["items"][0]["body_ref"]["sha256"] == digest
+    assert json.loads(registry_path.read_text())["items"][0]["body_ref"]["sha256"] == "sha256:" + hashlib.sha256(note.read_bytes()).hexdigest()
     assert store.context("research-writing")["memories"] == []
-    with pytest.raises(ValueError, match="requires current Framework readback"):
-        read_knowledge_source("synthetic.research.principle", store.paths)
+    assert read_knowledge_source("synthetic.research.principle", store.paths)["content"] == note.read_text()
     # Reverting bytes cannot bypass an explicit source grant withdrawal.
     note.write_text("# Research principle\nKeep evidence and interpretation separate.\n")
     registry["sources"][0]["status"] = "revoked"

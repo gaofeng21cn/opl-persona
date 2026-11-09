@@ -728,9 +728,26 @@ def build_obsidian_note_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
         "evidence_refs": evidence_refs,
         "expected_digest": expected_digest,
     }
+    if "knowledge_writeback" in payload:
+        knowledge = payload["knowledge_writeback"]
+        fields = {"knowledge_id", "target_scope", "content_kind", "proposed_rule_or_mechanism", "evidence_class", "review_requirement"}
+        if not isinstance(knowledge, Mapping) or set(knowledge) != fields:
+            raise ValueError("knowledge_writeback must supply the Framework knowledge proposal fields")
+        if operation != "update" or not re.fullmatch(r"[a-z][a-z0-9._-]*", str(knowledge["knowledge_id"])):
+            raise ValueError("knowledge_writeback requires an update and a valid knowledge_id")
+        note_payload["knowledge_writeback"] = dict(knowledge)
+    if "knowledge_registration" in payload:
+        registration = payload["knowledge_registration"]
+        if (operation != "create" or "knowledge_writeback" in note_payload
+                or not isinstance(registration, Mapping) or set(registration) != {"registry_ref", "item"}
+                or not isinstance(registration["item"], Mapping)):
+            raise ValueError("knowledge_registration requires a create, registry_ref and Framework item")
+        note_payload["knowledge_registration"] = dict(registration)
     proposal = _proposal(
         kind=OBSIDIAN_NOTE_CONTRACT,
-        input_id=target_path,
+        # Bind identity to the exact replacement bytes so each accepted source
+        # revision gets a new immutable proposal while retries remain idempotent.
+        input_id=hashlib.sha256(json.dumps({"operation": operation, **note_payload}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
         target=OBSIDIAN_NOTE_CONTRACT,
         operation=operation,
         payload=note_payload,

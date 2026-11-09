@@ -181,7 +181,7 @@ Proposal rows include
 `preview:{title,target,body,before,after,evidence_refs}`. Target is the relative
 note path or explicit owner target; body is proposed text or a structured-payload
 JSON presentation. Note after is the exact Markdown produced by the existing
-owner renderer, including frontmatter, tags, links and evidence. Other after
+owner renderer, including explicitly supplied frontmatter and links. Provenance and tags remain in the proposal and receipt; no frontmatter is synthesized from them. Other after
 values are the proposed payload object. Before is `null` unless the exact update
 target is safely readable through a compatible Obsidian `notes.read` binding
 and its bytes match the target's expected digest. A single compatible binding
@@ -196,10 +196,26 @@ resource binding and exact-digest checks.
 Knowledge-dependent proposal rows retain their exact `payload.source_versions`
 and expose a fresh `source_verification`. Approval rechecks those dependencies;
 a stale proposal remains historical review evidence but cannot gain approval
-until its source interpretation is regenerated. The Obsidian author adapter
-does not accept a new Framework knowledge revision: editing a registered note
-changes its bytes, so the resolver requires a separate `review-source` readback
-before the revised note can enter current context.
+until its source interpretation is regenerated. Registered note updates use the same Framework knowledge writer as other
+consumers. A note payload may include `knowledge_writeback` with `knowledge_id`,
+`target_scope`, `content_kind`, `proposed_rule_or_mechanism`, `evidence_class`, and
+`review_requirement`. Persistence calls `knowledge propose` against the exact
+accepted source digest. Authorization requires `knowledge_review` containing
+`reviewer`, `reviewed_at`, and `next_review_at`, then calls `knowledge review`.
+Apply calls `knowledge apply`, stores its receipt, and advances the unique body
+and registry accepted revision together. Framework target resolution rejects a
+registered note sent through the ordinary document writer or an unrelated binding.
+`OPL_PROJECT_ROOT`, when supplied, is forwarded as `--project` on all knowledge
+reads, dependency checks and writes.
+
+New knowledge uses `knowledge_registration:{registry_ref,item}` on a create
+proposal, with a complete Framework durable knowledge item and the same explicit
+review metadata. The ordinary note adapter creates the unique selected source
+body; Framework `knowledge register` then registers those exact bytes in the
+already bound registry. A retained `body_receipt` lets a failed registration retry
+without repeating the body create. Registration does not create another source
+body, registry, or semantic classifier. Relay candidate promotion stays evidence
+until an authorized maintainer chooses the body, scope and item metadata.
 
 All CLI proposal builders and the existing three App propose actions persist
 to `data/persona/proposals.json`. Capture/triage also stage Persona-local Inbox
@@ -217,7 +233,7 @@ The only cross-system write primitive is a reviewable proposal:
 source evidence -> opl-persona-proposal.v1 -> user review -> owner adapter
 ```
 
-Each proposal contains a stable id, an explicit target, payload, source
+Each note revision binds a new immutable identity to its exact payload; identical retries retain that identity. Each proposal contains a stable id, an explicit target, payload, source
 references, and `approval.external_write_allowed=false`. An adapter can execute
 only an exact user-approved proposal. A proposal is not a published website
 change, sent email, or written vault note.
@@ -290,8 +306,7 @@ policy metadata, and health metadata; it never holds credentials or authority
 content. The CLI can set and check `obsidian` directory bindings using
 `knowledge.obsidian.v1` or `knowledge.documents.v1`, and `markdown` directory
 bindings using `knowledge.documents.v1`. The health check proves directory
-reachability only. The existing note writer remains an Obsidian-specific owner
-adapter; a Markdown directory binding does not invent another write action.
+reachability only. The same note writer accepts both selected directory providers; both retain the same exact approval and path checks.
 `bindings.py` owns
 `opl-persona-resource-binding.v1` and `opl-persona-resource-health.v1`; health
 values are `healthy`, `degraded`, `unavailable`, or `unknown`. A stored health
