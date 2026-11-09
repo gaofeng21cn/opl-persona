@@ -189,3 +189,10 @@ actionlint .github/workflows/ci.yml
 ## 许可证
 
 OPL Persona 采用 [Apache License 2.0](./LICENSE)。
+
+登记知识的笔记修订通过提案中的 `knowledge_writeback` 调用 Framework
+`knowledge propose/review/apply`。新正文可带
+`knowledge_registration:{registry_ref,item}`：适配器先写唯一正文，Framework 再登记
+精确接受版本。授权显式提供 `knowledge_review:{reviewer,reviewed_at,next_review_at}`。
+普通未登记 Markdown 仍可使用；来源和标签留在提案及回执，渲染器不自动合成 frontmatter。
+字段与恢复边界见[架构说明](docs/architecture.md)。

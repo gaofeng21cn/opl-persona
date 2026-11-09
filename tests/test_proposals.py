@@ -366,3 +366,82 @@ def test_proposal_search_filters_the_complete_payload_collection_before_paging_a
     assert empty["items"] == [] and empty["pagination"]["total"] == 4 and not empty["pagination"]["has_more"]
     assert calls == []
     assert empty["collection_actions"] == data["collection_actions"]
+
+
+def test_registered_source_uses_framework_writeback_and_never_local_writer(store, tmp_path, monkeypatch):
+    before = b"# Accepted\n"
+    revision = "sha256:" + hashlib.sha256(before).hexdigest()
+    knowledge = {"knowledge_id": "owner.note", "target_scope": {"kind": "owner", "id": "owner"},
+        "content_kind": "policy", "proposed_rule_or_mechanism": "Reviewed rule", "evidence_class": "owner",
+        "review_requirement": "owner review"}
+    monkeypatch.setattr("opl_persona.proposals.read_knowledge_source", lambda *a: {"sha256": revision})
+    calls = []
+    monkeypatch.setattr("opl_persona.proposals.propose_knowledge_writeback",
+        lambda *a, **k: calls.append(("propose", a, k)) or {"proposal_id": "a" * 64})
+    monkeypatch.setattr("opl_persona.proposals.review_knowledge_writeback",
+        lambda *a, **k: calls.append(("review", a, k)) or {"decision": "accepted"})
+    monkeypatch.setattr("opl_persona.proposals.apply_knowledge_writeback",
+        lambda *a, **k: calls.append(("apply", a, k)) or {"status": "applied", "registry_sha256": "sha256:new"})
+    monkeypatch.setattr("opl_persona.proposals.resolve_knowledge_target",
+        lambda *a: {"registered": True, "knowledge_id": "owner.note", "authorized": True})
+    monkeypatch.setattr("opl_persona.proposals.apply_approved_obsidian_note", lambda *a, **k: pytest.fail("local writer used"))
+    item = propose(store, note_input() | {"operation": "update", "expected_digest": revision,
+        "knowledge_writeback": knowledge})
+    binding(store, tmp_path / "vault")
+    store.review(**review_input(item), decision="approved")
+    identity = {"proposal_id": item["id"], "expected_digest": item["proposal_digest"], "binding_id": "knowledge"}
+    with pytest.raises(ValueError, match="explicit reviewer"):
+        store.authorize_obsidian(**identity, approval_ref="approval://write", confirmation="confirmed")
+    store.authorize_obsidian(**identity, approval_ref="approval://write", confirmation="confirmed",
+        knowledge_review={"reviewer": "owner", "reviewed_at": "2026-11-09T00:00:00Z", "next_review_at": "2027-11-09T00:00:00Z"})
+    assert store.apply_obsidian(**identity, external_approval_ref="approval://write")["receipt"]["registry_sha256"] == "sha256:new"
+    assert [c[0] for c in calls] == ["propose", "review", "apply"]
+
+
+def test_plain_adapter_cannot_bypass_registered_source(store, tmp_path, monkeypatch):
+    item = propose(store)
+    binding(store, tmp_path / "vault")
+    store.review(**review_input(item), decision="approved")
+    monkeypatch.setattr("opl_persona.proposals.resolve_knowledge_target", lambda *a: {"registered": True, "knowledge_id": "owner.note"})
+    with pytest.raises(ValueError, match="exact Framework"):
+        store.authorize_obsidian(**review_input(item, "approval://write"), binding_id="knowledge", confirmation="confirmed")
+
+
+def test_empty_frontmatter_does_not_inject_provenance_or_tags():
+    value = note_input() | {"frontmatter": {}}
+    assert render_obsidian_note(value) == (value["body"] + "\n").encode()
+
+
+def test_changed_note_gets_new_immutable_identity():
+    first = build_obsidian_note_proposals(note_input())["proposals"][0]
+    second = build_obsidian_note_proposals(note_input() | {"body": "# Changed"})["proposals"][0]
+    assert first["proposal_id"] != second["proposal_id"]
+
+
+def test_new_knowledge_registers_after_unique_body_write_and_recovers(store, tmp_path, monkeypatch):
+    registration = {"registry_ref": "/private/registry.json", "item": {"knowledge_id": "owner.new-note"}}
+    item = propose(store, note_input() | {"frontmatter": {}, "tags": [], "knowledge_registration": registration})
+    vault = tmp_path / "vault"
+    binding(store, vault)
+    store.review(**review_input(item), decision="approved")
+    identity = {"proposal_id": item["id"], "expected_digest": item["proposal_digest"], "binding_id": "knowledge"}
+    store.authorize_obsidian(**identity, approval_ref="approval://new", confirmation="confirmed",
+        knowledge_review={"reviewer": "owner", "reviewed_at": "2026-11-09T00:00:00Z", "next_review_at": "2027-11-09T00:00:00Z"})
+    calls = []
+    def register(paths, value, **kwargs):
+        body = (vault / "Research/new-note.md").read_bytes()
+        assert body == (note_input()["body"] + "\n").encode()
+        assert kwargs["expected_sha256"] == "sha256:" + hashlib.sha256(body).hexdigest()
+        assert kwargs["expected_body_path"] == (vault / "Research/new-note.md").resolve()
+        calls.append(value)
+        if len(calls) == 1:
+            raise ValueError("registration unavailable")
+        return {"status": "registered", "knowledge_id": "owner.new-note"}
+    monkeypatch.setattr("opl_persona.proposals.register_knowledge_source", register)
+    with pytest.raises(ValueError, match="registration unavailable"):
+        store.apply_obsidian(**identity, external_approval_ref="approval://new")
+    retained = store.inspect(item["id"])
+    assert retained["status"] == "approved" and retained["body_receipt"]["status"] == "applied"
+    applied = store.apply_obsidian(**identity, external_approval_ref="approval://new")
+    assert applied["receipt"]["knowledge_registration"]["status"] == "registered"
+    assert len(calls) == 2

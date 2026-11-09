@@ -130,6 +130,8 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
             "tags": {"type": "string_list", "required": True},
             "evidence_refs": {"type": "string_list", "required": True},
             "expected_digest": {"type": "string", "required": True},
+            "knowledge_writeback": {"type": "object", "required": False},
+            "knowledge_registration": {"type": "object", "required": False},
         },
         "result": "knowledge.obsidian.v1#note.propose.result",
     },
@@ -160,6 +162,7 @@ ACTION_CONTRACTS.update({
             "binding_id": {"type": "string", "required": True},
             "approval_ref": {"type": "string", "required": True},
             "confirmation": {"type": "string", "required": True, "enum": ["confirmed"]},
+            "knowledge_review": {"type": "object", "required": False},
         },
         "result": "knowledge.obsidian.v1#note.authorize.result",
     },
@@ -451,7 +454,7 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
         try:
             bindings = [{"binding_id": identifier, **binding.to_dict()} for identifier, binding in
                         list_resource_bindings(store.paths.workspace).items()
-                        if binding.provider_id == "obsidian" and binding.capability_id in {
+                        if binding.provider_id in {"obsidian", "markdown"} and binding.capability_id in {
                             "knowledge.obsidian.v1", "knowledge.documents.v1"} and "notes.write" in binding.scopes]
         except FileNotFoundError:
             bindings = []
