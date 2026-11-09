@@ -224,7 +224,7 @@ def apply_approved_obsidian_note(
     _require_approval(proposal, approval)
     root = _binding_vault(binding)
     target = _resolve_target(root, _safe_target_path(payload["target_path"]))
-    if paths is not None and resolve_knowledge_target(target, paths)["registered"]:
+    if resolve_knowledge_target(target, paths or PersonaPaths.resolve())["registered"]:
         raise ValueError("registered knowledge must use Framework knowledge writeback")
     operation = _required_text(proposal.get("operation"), "operation")
     expected_digest = _required_text(payload.get("expected_digest"), "expected_digest")

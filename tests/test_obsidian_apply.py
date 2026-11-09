@@ -12,6 +12,11 @@ from opl_persona.core import build_obsidian_note_proposals
 from opl_persona.obsidian_apply import apply_approved_obsidian_note
 
 
+@pytest.fixture(autouse=True)
+def isolated_profile(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
+
+
 def digest(value: bytes) -> str:
     return f"sha256:{hashlib.sha256(value).hexdigest()}"
 
