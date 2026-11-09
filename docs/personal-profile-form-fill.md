@@ -15,7 +15,8 @@ Obsidian、邮件、第三方门户或 OPL App 的既有 authority。
 
 当前 owner descriptor 只导出一个 `opl-persona` Skill，以及 context、memory、Inbox、
 Obsidian、mail 和 website proposal modules。现有 Resource Binding 只为用户选择的
-Obsidian 资源提供 opaque binding 与 owner-side resolution；它不等于个人字段 registry、
+Obsidian 或普通 Markdown 目录提供 opaque binding 与目录检查；知识身份、版本和读取授权
+使用 Framework 的通用机制。这些能力不等于个人字段 registry、
 表格解析器、form adapter 或提交 route。本文提出的 Core、Skill、action 名和 receipt
 shape 都是后续 owner contract 候选，不得被 App、Framework 或自动化当成已安装、已发布
 或可执行接口。
@@ -28,7 +29,7 @@ shape 都是后续 owner contract 候选，不得被 App、Framework 或自动�
 
 本子域的目标是：
 
-> 以 Obsidian 中的个人资料和字段来源为事实基础，按用途准备表格内容，并以
+> 以用户选定主源中的个人资料和字段来源为事实基础，按用途准备表格内容，并以
 > review-gated proposal 输出准确的本地表格或网站草稿。
 
 它必须同时提供一个**核心模块**和一个薄 **Codex Skill**：
@@ -48,17 +49,18 @@ shape 都是后续 owner contract 候选，不得被 App、Framework 或自动�
 
 | 数据类别 | Authority | Persona 的使用方式 |
 | --- | --- | --- |
-| 履历、单位、职称、研究方向、成果、任职、讲课资料 | 用户维护的 Obsidian note / vault attachment | 通过稳定 `source_ref` 读取、核验和引用 |
-| 公共主页和团队简介 | `gflab_web` 与已核验的 Obsidian 资料 | 作为公开表述的辅助证据，不替代 Obsidian 资料 |
-| 联系方式、办公/通讯地址与邮编 | 用户维护的 Obsidian note | 按本次用途读取并填入对应字段 |
-| 身份证、护照、银行账户、开户行、税务、收款信息及其他个人资料 | 用户维护的 Obsidian note / vault attachment | 按需读取；只在获准的目标字段中使用 |
+| 履历、单位、职称、研究方向、成果、任职、讲课资料 | 用户选定的资料正文及证明原件 | 通过稳定来源身份与版本读取、核验和引用 |
+| 公共主页和团队简介 | `gflab_web` 与已核验的个人资料 | 依据各自事实范围提供公开表述证据 |
+| 联系方式、办公/通讯地址与邮编 | 用户维护的唯一资料正文 | 按本次用途读取并填入对应字段 |
+| 身份证、护照、银行账户、开户行、税务、收款信息及其他个人资料 | 用户选定的资料正文及证明原件 | 按需读取；只在获准的目标字段中使用 |
 | 邮箱和邮件关系事实 | Relay / 邮件 provider | 仅按已授权用途取用，不把邮箱历史自动变为 profile 值 |
 | 表格字段、提交状态和正式结果 | 目标文件或第三方表单 | adapter 回读后生成 receipt |
 
-个人资料统一由 Obsidian 管理，包括用户认为需要保留的身份、证件、金融、税务和
-收款字段；本设计不要求迁移到 macOS Keychain，也不额外建立一套秘密值库。Obsidian
-是这些个人资料值的 authority，Persona 只保存可审计的引用、来源、当前性、用途和
-审批状态。
+个人资料保留在用户选定的唯一主源，包括其需要维护的身份、证件、金融、税务和收款字段。
+该来源可以是已有 Obsidian 库，也可以是普通工作目录；不因使用 Persona 改变归属，
+也不额外建立值库。Persona 只保存可审计的引用、来源版本、当前性、用途和审批状态。
+来源与派生关系遵循
+[Framework 知识来源与记忆政策](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md)。
 
 个人资料值仍不得复制到 Git、Plugin cache、Package 安装目录、聊天记录、截图、
 proposal log 或 OPL App durable state。需要在外部表格中使用时，只把本次批准的字段
@@ -74,7 +76,7 @@ Persona workspace 只保存可审计的引用和 policy：
 ```
 
 这些是私有运行态，不进入源仓、Plugin cache 或 OPL App 的领域状态；它们不是新的值库，
-Obsidian 仍拥有个人资料事实。
+用户选定的正文主源仍拥有个人资料事实。
 
 ## 字段与来源合同
 
@@ -92,7 +94,7 @@ display_policy        full | masked | never_in_chat
 
 `field_id` 是 API；文件路径、简历段落和表单标题不是 API。模型不能根据相似表述自行
 填充字段，也不能将一个用途的授权扩大到其他用途。敏感等级只用于决定展示和审批
-强度，不改变个人资料统一由 Obsidian 管理这一事实。
+强度，不改变个人资料的主源归属。
 
 字段目录必须能回答：“此字段来自哪里、是否仍有效、可用于什么表、是否能在聊天中显示”。
 缺任何一项时，Core 应返回 `needs_user_input`，而不是从旧 CV 或相邻字段猜测。
@@ -170,7 +172,7 @@ App 不能拥有个人值、浏览器 cookie 或领域写入逻辑。
 
 ## 分阶段落地与验收
 
-1. **资料盘点**：在 Obsidian 中建立字段目录、来源与 `verified_at`；不复制到 Persona、
+1. **资料盘点**：为用户选定的正文主源建立字段目录、来源与 `verified_at`；不复制资料值到 Persona、
    Git 或插件缓存。
 2. **单模板闭环**：选择一个真实、常用的讲课/行程/CV 模板，完成
    inspect → draft → approval → 写入副本 → readback。

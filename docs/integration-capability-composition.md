@@ -8,6 +8,11 @@ State: `active_target_design`
 只在[实现架构](architecture.md)及其源码维护；本文不新增另一套机器合同或兼容入口。
 个人资料、表格、专业门户与 Recipe catalog 尚不是当前可调用能力。
 
+知识的归属、内容性质、主源与运行快照采用
+[Framework 知识来源与记忆政策](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md)。
+Persona 负责跨领域派生上下文，通用来源登记、授权与版本验证由 Framework 持有；其他智能体
+可直接使用这些通用机制，不需要经 Persona 转发。
+
 ## 对象分工
 
 | 对象 | 负责的问题 | 约束 |
@@ -31,7 +36,8 @@ Persona 只持有跨域判断、provenance 和 proposal。详细消费规则归
 邮件、知识、网站、个人资料、表格、门户和 Inbox 是组合需求，不是一张预注册的产品清单。
 已导出的 `knowledge.obsidian.v1`、`website.publication.v1`、`communications.mail.v1`
 和 `personal.inbox.v1` 仍按 descriptor 与调用者的实际合同使用。
-`knowledge.documents.v1` 已被 Obsidian Binding 接受，但不表示存在通用 Provider resolver。
+`knowledge.documents.v1` 已被 Obsidian 和普通 Markdown 目录 Binding 接受；这些 Binding
+用于现有笔记适配器的资源定位与目录检查，不等于 Framework 的通用知识来源登记或读取授权。
 `publishing.site.v1`、`personal.profile.v1`、`forms.fill.v1` 和 `external.portal.v1`
 只属于设计候选，不能由 App 根据本文推导可调用动作。
 
@@ -49,7 +55,8 @@ Provider 只暴露实际支持的 inspect/health、read/search、propose、appro
 Binding 存放在选定 Profile Workspace 的 `data/persona` 下。资源正文、邮件、网站 checkout、
 个人资料值和 Cookie/token/密码继续由资源 owner 或用户选择的安全存储持有。
 Persona 仅保存资源引用、scope、policy 和观察信息，不将它们复制进 Git、Package、Plugin cache
-或 App durable state。个人资料值统一归用户维护的 Obsidian，详见
+或 App durable state。个人资料值归用户选定的唯一正文主源，可以是 Obsidian 或普通目录；
+Persona 保存的摘要须绑定已接受来源版本，并在来源变动、过期或撤销时排除或重审。详见
 [个人资料与表格](personal-profile-form-fill.md)。
 
 Provider 的 fresh probe 决定当前可达性、支持操作和授权范围；保存的健康观察不能成为永久事实。
@@ -59,7 +66,8 @@ Provider 的 fresh probe 决定当前可达性、支持操作和授权范围；�
 ## Recipe
 
 Recipe 声明角色需要或偏好的 Capability、Binding 选择规则和审批策略。
-PI 当前以知识库作为核心资源；这不使 Obsidian 成为所有未来 Persona 的硬 runtime 依赖。
+PI 当前以知识库作为核心资源；Obsidian 是可选来源。默认初始化只建立控制目录，用户可以
+沿用外部库，也可以显式选择同一工作目录的本地正文。
 邮件、网站、表格和专业门户保持可选，未使用这些资源的用户仍可使用其余能力。
 
 Recipe 不写死邮箱客户端、网站生成器、vault 路径或期刊站点。用户应能从可发现能力、已安装

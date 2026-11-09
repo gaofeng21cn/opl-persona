@@ -72,21 +72,24 @@ def test_workspace_init_creates_profile_skeleton(tmp_path: Path) -> None:
     assert (profile / "profile").is_dir()
     assert (profile / "data" / "relay").is_dir()
     assert (profile / "data" / "persona").is_dir()
-    assert (profile / "profile" / "identity.md").is_file()
+    assert not (profile / "profile" / "identity.md").exists()
+    assert not (profile / "profile" / "preferences.md").exists()
     assert (profile / "policies" / "mail-triage.md").is_file()
     assert (profile / "data" / "persona" / "resource-bindings.json").is_file()
-    assert result["readiness"] == "partial"
+    assert result["readiness"] == "ready"
+    assert result["readiness_scope"] == "runtime_configuration"
+    assert result["external_knowledge_binding_required"] is False
     assert result["created"]
 
 
 def test_workspace_init_does_not_overwrite_profile_templates(tmp_path: Path) -> None:
     profile = tmp_path / "profile"
     paths = PersonaPaths.resolve(environ={"OPL_PROFILE_WORKSPACE": str(profile)})
-    paths.init_workspace()
+    paths.init_workspace(local_knowledge=True)
     identity = profile / "profile" / "identity.md"
     identity.write_text("# My identity\n", encoding="utf-8")
 
-    result = paths.init_workspace()
+    result = paths.init_workspace(local_knowledge=True)
 
     assert identity.read_text(encoding="utf-8") == "# My identity\n"
     assert result["created"] == []
@@ -104,9 +107,40 @@ def test_setup_status_exposes_actionable_steps_before_init(tmp_path: Path) -> No
         "profile.identity",
         "profile.preferences",
         "policy.mail",
-        "binding.obsidian",
+        "binding.knowledge",
     }
     assert status["next_actions"][0] == "opl-persona --json setup init"
+    assert all(step["status"] == "optional" for step in status["steps"]
+               if step["id"] in {"profile.identity", "profile.preferences", "binding.knowledge"})
+
+
+def test_existing_knowledge_binding_does_not_create_personal_body_copies(tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    source = vault / "identity.md"
+    source.write_text("# Existing identity\n", encoding="utf-8")
+    write_obsidian_binding(profile, vault)
+    paths = PersonaPaths.resolve(environ={"OPL_PROFILE_WORKSPACE": str(profile)})
+
+    result = paths.init_workspace()
+
+    assert result["readiness"] == "ready"
+    assert not (profile / "profile" / "identity.md").exists()
+    assert source.read_text(encoding="utf-8") == "# Existing identity\n"
+
+
+def test_local_knowledge_templates_are_explicit_and_optional(tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    paths = PersonaPaths.resolve(environ={"OPL_PROFILE_WORKSPACE": str(profile)})
+    paths.init_workspace()
+
+    result = paths.init_workspace(local_knowledge=True)
+
+    assert "profile/identity.md" in result["created"]
+    assert "profile/preferences.md" in result["created"]
+    assert result["readiness"] == "ready"
+    assert json.loads((paths.data_root / "resource-bindings.json").read_text())["bindings"] == {}
 
 
 def test_obsidian_note_is_read_only_and_scoped(tmp_path: Path) -> None:

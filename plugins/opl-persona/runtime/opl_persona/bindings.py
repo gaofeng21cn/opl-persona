@@ -31,6 +31,10 @@ _SENSITIVE_KEY_PARTS = (
     "api_key",
 )
 _HEALTH_STATUSES = {"healthy", "degraded", "unavailable", "unknown"}
+_LOCAL_DOCUMENT_CAPABILITIES = {
+    "obsidian": {"knowledge.obsidian.v1", "knowledge.documents.v1"},
+    "markdown": {"knowledge.documents.v1"},
+}
 
 
 def _now() -> str:
@@ -76,6 +80,9 @@ class ResourceBinding:
         object.__setattr__(self, "capability_id", _text(self.capability_id, "capability_id"))
         object.__setattr__(self, "provider_id", _text(self.provider_id, "provider_id"))
         object.__setattr__(self, "resource_ref", _text(self.resource_ref, "resource_ref"))
+        capabilities = _LOCAL_DOCUMENT_CAPABILITIES.get(self.provider_id)
+        if capabilities is not None and self.capability_id not in capabilities:
+            raise ValueError(f"{self.provider_id} does not provide {self.capability_id}")
         scopes = tuple(dict.fromkeys(_text(item, "scope") for item in self.scopes))
         if not scopes:
             raise ValueError("scopes must contain at least one scope")
@@ -321,12 +328,12 @@ def check_resource_binding(
         "scopes": list(binding.scopes),
         "status": "unknown",
     }
-    if binding.provider_id == "obsidian":
+    if binding.provider_id in _LOCAL_DOCUMENT_CAPABILITIES:
         try:
             root = binding_file_root(
                 binding,
-                provider_id="obsidian",
-                capability_ids={"knowledge.obsidian.v1", "knowledge.documents.v1"},
+                provider_id=binding.provider_id,
+                capability_ids=_LOCAL_DOCUMENT_CAPABILITIES[binding.provider_id],
                 required_scope="notes.read",
             )
         except (OSError, ValueError) as exc:

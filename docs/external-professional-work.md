@@ -40,7 +40,7 @@ flowchart LR
     U["用户"] --> APP["OPL App / Codex 对话"]
     APP --> P["OPL Persona\n角色、上下文、判断、proposal"]
     P --> R["OPL Relay\n邮件证据与草稿"]
-    P --> K["Obsidian\n知识与技术备忘录"]
+    P --> K["用户选定的知识来源\n知识与技术备忘录"]
     P --> G["gflab_web\n实验室公开网站"]
     P --> X["对外专业门户模块\n任务、权限、站点适配"]
     X --> E["原生浏览器或站点 API\n第三方事实与提交 authority"]
@@ -64,8 +64,9 @@ Persona、站点适配器和浏览器/API 的职责必须分开：
 
 本节的“账户材料”只指第三方门户的登录凭据、认证会话和站点访问能力；个人资料值
 （包括身份证、护照、银行、税务和收款信息）统一由
-[个人资料与表格填写](personal-profile-form-fill.md)规定，直接由用户维护的 Obsidian
-资料提供。Persona workspace 中只保留门户访问引用和策略，密钥由原生安全存储保存：
+[个人资料与表格填写](personal-profile-form-fill.md)规定，由用户选定的唯一资料主源提供，
+可沿用 Obsidian 或普通工作目录。Persona workspace 中只保留门户访问引用和策略，
+密钥由原生安全存储保存：
 
 ```text
 ~/OPL/profiles/<user>/
@@ -164,7 +165,7 @@ injection、诱导性文字或无法验证的导航变化不得改变 policy、s
 - Relay 可作为任务发现与关系证据来源，例如编辑邀约邮件；它继续拥有邮件读取、
   Apple Mail 草稿和发送回执。
 - Obsidian 可提供技术背景和写作输入；它继续拥有笔记写入。
-- [个人资料与表格填写](personal-profile-form-fill.md)模块从用户维护的 Obsidian
+- [个人资料与表格填写](personal-profile-form-fill.md)模块从用户选定主源的
   个人资料中，按用途、敏感等级和逐字段审批向外部门户提供本次表单所需字段；门户
   adapter 不读取或保存完整个人档案。
 - `gflab_web` 仅在任务明确需要公开展示时接收独立网站 proposal，不因外部门户任务而

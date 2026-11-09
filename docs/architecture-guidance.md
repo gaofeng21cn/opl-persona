@@ -22,8 +22,14 @@ integration boundaries, not current runtime inventory.
 
 The product is a personal communication and knowledge delegate:
 
-> Evidence from the user's systems, private memory for continuity, Obsidian for
-> personal knowledge, and Codex for judgment and drafting.
+> Evidence from the user's systems, source-bound derived context for continuity,
+> user-selected canonical knowledge, and Codex for judgment and drafting.
+
+Knowledge ownership, source bindings and lifetime follow the
+[Framework knowledge source and memory policy](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md).
+An existing Obsidian vault and a normal work directory use the same knowledge
+model. Persona adds cross-domain context, without owning another copy of
+personal facts or mediating every other agent's knowledge access.
 
 The long-term user-facing product is **OPL App**. It is a chat-first host with
 visual management surfaces for mail, memory, knowledge, proposals, research,
@@ -67,7 +73,7 @@ flowchart TB
     APP --> RT["Codex / app-server\njudgment + tools + approvals"]
     RT --> P["OPL Persona\nshared context + proposals"]
     RT --> R["OPL Relay\nmail evidence + drafts"]
-    P --> O["Obsidian\nprivate knowledge authority"]
+    P --> O["User-selected source\ncanonical private knowledge"]
     P --> W["gflab_web\npublic content + deployment authority"]
     R --> M["Mail provider / Apple Mail\nmail and send authority"]
     BASE["OPL base\ncontracts + carrier delegation"] --> APP
@@ -89,7 +95,7 @@ system keeps its own source of truth.
 | `opl-relay` | Mail identities, evidence, relationship memory, draft lifecycle, send receipts | Persona orchestration, website CMS, Obsidian vault |
 | `opl-persona` | PI context, provenance, cross-domain proposal shape and proposal state | Mail store, private vault, website source, credentials |
 | `gflab_web` | Public publication/news source, Hugo build, deployment source | Private Persona state or mail state |
-| Obsidian vault | Private notes, technical memos, and all user-maintained personal profile values | Public website or mail delivery |
+| User-selected knowledge source | Canonical private notes, technical memos, and personal profile values in Obsidian or ordinary files | Public website or mail delivery |
 | Mail provider / Apple Mail | Mailbox and final send state | Persona proposal state |
 
 App selects the current Shell through its
@@ -117,20 +123,22 @@ Code and private data are physically separate:
 
 ~/OPL/profiles/gaofeng/ # one user-owned Profile Workspace
 ├── AGENTS.md
-├── profile/             # identity and profile references
-├── policies/            # user processing rules
-├── context/             # durable working context
+├── profile/             # source references or explicitly selected local notes
+├── policies/            # optional local rules/templates, accepted before use
+├── context/             # optional local project sources
 ├── templates/
 ├── exports/
 └── data/
     ├── relay/           # mail, memory, draft and sync state
-    └── persona/         # Inbox, proposals, approvals and receipts
+    └── persona/         # role refs, derived context, Inbox, proposals and receipts
 ```
 
 The Profile Workspace is selected by `OPL_PROFILE_WORKSPACE`. It is the only
 workspace selector. When no selector is injected, the default is
 `~/OPL/profiles/<user>`.
-Obsidian remains an external, user-selected vault. A checkout, installed
+An existing Obsidian vault remains in its user-selected location. Without an
+external library, canonical notes may live in the business workspace; setup
+does not require a second personal body directory. A checkout, installed
 plugin, Package cache, generated fixture, or task worktree is never a data
 authority.
 
@@ -174,8 +182,8 @@ Persona can maintain proposal state and provenance, but an accepted proposal is
 still not an external write until the owning adapter executes it and reads back
 the resulting authority.
 
-For the personal-profile and external-professional-work target, Obsidian remains
-the authority for user-maintained profile values, including identity,
+For the personal-profile and external-professional-work target, the selected
+canonical knowledge source owns user-maintained profile values, including identity,
 employment, contact, payment, tax, and document fields. A future Persona owner
 surface may coordinate field references, provenance, currentness, purpose, and
 reviewable form proposals. Current source does not export a `personal_profile`

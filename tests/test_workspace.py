@@ -14,28 +14,38 @@ from opl_persona.workspace import CONTEXT_MODES, WorkspaceStore, relay_read
 @pytest.fixture
 def store(monkeypatch, tmp_path):
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
+    monkeypatch.setattr("opl_persona.workspace.verify_knowledge_dependencies", lambda value, paths:
+                        {"valid": bool(value), "issues": [] if value else ["missing_source_versions"]})
     return WorkspaceStore()
 
 
 def person_input(identifier="person:demo"):
     return {"person_id": identifier, "display_name": "Demo researcher", "summary": "Research collaborator",
-            "aliases": ["demo@example.test"], "source_refs": ["obsidian://people/demo.md"], "expected_digest": "absent"}
+            "aliases": ["demo@example.test"], "source_refs": ["obsidian://people/demo.md"],
+            "source_versions": {"owner.people.demo": "sha256:" + "a" * 64}, "expected_digest": "absent"}
 
 
 def memory_input(identifier="memory:demo"):
     return {"memory_id": identifier, "title": "Research meeting", "summary": "An evidence-backed relationship summary",
             "memory_kind": "relationship", "person_ids": ["person:demo"], "context_ids": ["academic-mail"],
-            "source_refs": ["obsidian://people/demo.md", "website://lab/research"], "expected_digest": "absent"}
+            "source_refs": ["obsidian://people/demo.md", "website://lab/research"],
+            "source_versions": {"owner.research.summary": "sha256:" + "b" * 64}, "expected_digest": "absent"}
 
 
 def framework_relay_response(ref):
+    memory = {"id": "relay-person", "name": "Researcher", "status": "approved",
+              "source_refs": ["email-store://demo/source"], "summary": "Prior correspondence",
+              "source_currentness": {"status": "current", "checked_at": "2026-11-09T00:00:00Z", "reasons": []}}
+    item = memory if ref.endswith("#search") else {
+        "id": "relay-person", "name": "Researcher", "summary": memory["summary"],
+        "source_refs": memory["source_refs"], "approved_memories": [memory]}
     return {"opl_app_contribution": {
         "surface_kind": "opl_app_package_contribution.v1", "package_id": "opl-relay",
         "ref": ref, "operation": "read", "confirmation_required": False,
         "response": {"schema_version": "opl-package-app-contribution-response.v1", "ok": True,
             "ref": ref, "operation": "read", "result": {
-                "kind": "data", "state": "ready", "data": {"items": [{"id": "relay-person", "name": "Researcher",
-                    "source_refs": ["email-store://demo/source"], "summary": "Prior correspondence"}]}}}}}
+                "kind": "data", "state": "ready", "data": {"items": [item],
+                    "source_policy": {"source_currentness_checked": True, "only_approved_memory_included": True}}}}}}
 
 
 def test_four_working_modes_and_persistent_selection(store):
@@ -50,12 +60,14 @@ def test_four_working_modes_and_persistent_selection(store):
     assert WorkspaceStore().context()["context"]["id"] == "research-writing"
     item = next(item for item in contexts if item["id"] == "research-writing")
     updated = store.update_context(context_id=item["id"], title=item["title"], summary="Updated writing context",
-                                   guidance={"language": "English"}, source_refs=["profile://writing"], expected_digest=item["digest"])
+                                   guidance={"language": "English"}, source_refs=["profile://writing"],
+                                   source_versions={"owner.writing.policy": "sha256:" + "c" * 64}, expected_digest=item["digest"])
     assert WorkspaceStore().context()["context"]["summary"] == updated["summary"]
     assert updated["summary_i18n"] == {"en-US": "Updated writing context"}
     with pytest.raises(ValueError, match="expected_digest"):
         store.update_context(context_id=item["id"], title=item["title"], summary="Stale edit", guidance={},
-                             source_refs=item["source_refs"], expected_digest=item["digest"])
+                             source_refs=item["source_refs"], source_versions={"owner.writing.policy": "sha256:" + "c" * 64},
+                             expected_digest=item["digest"])
 
 
 def test_existing_default_summaries_gain_locale_metadata_without_overwriting_custom_text(store):
@@ -67,7 +79,8 @@ def test_existing_default_summaries_gain_locale_metadata_without_overwriting_cus
     store.path.write_text(json.dumps(state))
     before = store.path.read_bytes()
     contexts = store.list("contexts")
-    assert contexts[0]["summary_i18n"] == {"en-US": "User-authored summary"}
+    assert contexts[0]["summary_i18n"] == {}
+    assert contexts[0]["source_verification"]["valid"] is False
     assert all(set(item["summary_i18n"]) == {"zh-CN", "en-US"} for item in contexts[1:])
     assert store.path.read_bytes() == before
 
@@ -112,6 +125,7 @@ def test_relay_uses_exact_public_read_abi_and_never_copies_state(store, monkeypa
     monkeypatch.setattr(subprocess, "run", read)
     evidence = store.relay(collection, query="Researcher", entity="relay-person")
     assert evidence == {"state": "ready", "package_id": "opl-relay", "ref": ref,
+                        "source_policy": {"source_currentness_checked": True, "only_approved_memory_included": True},
                         "items": framework_relay_response(ref)["opl_app_contribution"]["response"]["result"]["data"]["items"]}
     argv, kwargs = captured[0]
     assert argv[:7] == ["opl", "app", "contribution", "read", "--package-id", "opl-relay", "--ref"]
@@ -143,6 +157,8 @@ def test_relay_uses_exact_public_read_abi_and_never_copies_state(store, monkeypa
     ("result", "data", None),
     ("result", "data", {}),
     ("result", "data", {"items": {}}),
+    ("result", "data", {"items": [], "source_policy": {}}),
+    ("result", "data", {"items": [], "source_policy": {"source_currentness_checked": True}}),
 ])
 def test_relay_framework_and_package_identity_must_match_before_reading_data(store, monkeypatch, section, field, value):
     ref = "personal.memory.v1#people"
@@ -156,6 +172,30 @@ def test_relay_framework_and_package_identity_must_match_before_reading_data(sto
         "state": "unavailable", "items": [], "package_id": "opl-relay", "ref": ref,
         "reason": "Relay public memory ABI unavailable"}
     assert not store.path.exists()
+
+
+@pytest.mark.parametrize("collection", ["people", "search"])
+@pytest.mark.parametrize("mutation", [
+    {"status": "candidate"}, {"source_currentness": None},
+    {"source_currentness": {"status": "needs_review", "checked_at": "2026-11-09T00:00:00Z", "reasons": ["source_revision_changed"]}},
+    {"source_currentness": {"status": "current", "checked_at": "", "reasons": []}},
+])
+def test_relay_rejects_stale_or_unverified_approved_summaries(store, monkeypatch, collection, mutation):
+    ref = f"personal.memory.v1#{collection}"
+    wire = framework_relay_response(ref)
+    item = wire["opl_app_contribution"]["response"]["result"]["data"]["items"][0]
+    memory = item if collection == "search" else item["approved_memories"][0]
+    memory.update(mutation)
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kwargs:
+                        subprocess.CompletedProcess(argv, 0, json.dumps(wire), ""))
+    result = relay_read(ref, {}, store.paths)
+    assert result["state"] == "ready"
+    if collection == "search":
+        assert result["items"] == []
+    else:
+        assert result["items"][0]["summary"] == ""
+        assert result["items"][0]["source_refs"] == []
+        assert result["items"][0]["approved_memories"] == []
 
 
 @pytest.mark.parametrize("shape", ["data", "package", "root-result", "wrapped-framework", "missing-outer", "null-outer"])

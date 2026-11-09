@@ -106,6 +106,28 @@ def test_persisted_digest_tampering_fails_closed(store):
         store.inspect(item["id"])
 
 
+def test_knowledge_dependent_proposal_requires_current_sources_at_review(store, monkeypatch):
+    versions = {"owner.mail.policy": "sha256:" + "a" * 64}
+    bundle = build_inbox_capture_proposals(capture_input())
+    bundle["proposals"][0]["payload"]["source_versions"] = versions
+    item = store.persist_bundle(bundle)["stored_items"][0]
+    current = {"valid": True, "issues": []}
+    def verify(value, paths):
+        assert value == versions
+        return dict(current)
+    monkeypatch.setattr("opl_persona.proposals.verify_knowledge_dependencies", verify)
+    assert store.inspect(item["id"])["source_verification"]["valid"] is True
+    original = store.path.read_bytes()
+    current.update(valid=False, issues=["source_revoked"])
+    assert store.list()[0]["source_verification"]["valid"] is False
+    with pytest.raises(ValueError, match="source_revoked"):
+        store.review(**review_input(item), decision="approved")
+    assert store.path.read_bytes() == original
+    # Historical review remains readable and rejectable without restoring source permission.
+    assert store.inspect(item["id"])["proposal"] == item["proposal"]
+    assert store.review(**review_input(item), decision="rejected")["status"] == "rejected"
+
+
 def test_authorize_requires_distinct_confirmation_resource_and_note(store, tmp_path):
     item = propose(store)
     binding(store, tmp_path / "vault")

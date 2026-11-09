@@ -21,6 +21,7 @@ from opl_persona.paths import PersonaPaths
 from opl_persona.workspace import WorkspaceStore
 
 from relay_v2 import mail_assessment, relay_v2_evidence
+from knowledge_inputs import POLICY_ID, configure_knowledge_inputs
 
 
 ROOT = Path(__file__).parents[1]
@@ -32,12 +33,42 @@ def isolated_profile(monkeypatch, tmp_path):
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
     monkeypatch.setattr("opl_persona.workspace.relay_read", lambda ref, value, paths: {
         "state": "ready", "items": [], "package_id": "opl-relay", "ref": ref})
+    monkeypatch.setattr("opl_persona.workspace.verify_knowledge_dependencies", lambda value, paths:
+                        {"valid": bool(value), "issues": [] if value else ["missing_source_versions"]})
 
 
 def run_cli(monkeypatch, capsys, request: object) -> tuple[int, dict]:
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(request)))
     code = main(["--json", "app-contribution"])
     return code, json.loads(capsys.readouterr().out)
+
+
+def test_setup_cli_needs_no_external_knowledge_store(capsys):
+    assert main(["--json", "setup", "init"]) == 0
+    result = json.loads(capsys.readouterr().out)["setup"]
+    profile = PersonaPaths.resolve().workspace
+    assert result["readiness"] == "ready"
+    assert result["readiness_scope"] == "runtime_configuration"
+    assert not (profile / "profile" / "identity.md").exists()
+
+    assert main(["--json", "setup", "init", "--local-knowledge"]) == 0
+    result = json.loads(capsys.readouterr().out)["setup"]
+    assert "profile/identity.md" in result["created"]
+
+
+def test_markdown_binding_cli_keeps_existing_source_in_place(capsys, tmp_path):
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    source = notes / "identity.md"
+    source.write_text("# Existing identity\n", encoding="utf-8")
+    assert main(["--json", "binding", "set", "--id", "existing", "--provider", "markdown", "--path", str(notes)]) == 0
+    binding = json.loads(capsys.readouterr().out)["binding"]
+    assert binding["capability_id"] == "knowledge.documents.v1"
+    assert binding["resource_ref"] == notes.as_uri()
+    assert main(["--json", "binding", "check", "--id", "existing"]) == 0
+    assert json.loads(capsys.readouterr().out)["binding"]["status"] == "healthy"
+    assert source.read_text(encoding="utf-8") == "# Existing identity\n"
+    assert not (PersonaPaths.resolve().workspace / "profile" / "identity.md").exists()
 
 
 def test_describe_exposes_only_typed_declared_data_contract(monkeypatch, capsys) -> None:
@@ -184,9 +215,7 @@ def test_execute_never_approves_without_exact_digest(monkeypatch, capsys) -> Non
 
 def test_execute_generates_only_declared_reviewable_proposals(monkeypatch, capsys, tmp_path: Path) -> None:
     profile = tmp_path / "profile"
-    policy = profile / "policies" / "mail-triage.md"
-    policy.parent.mkdir(parents=True)
-    policy.write_text("# Mail rules\n\nPrioritize manuscript matters.", encoding="utf-8")
+    configure_knowledge_inputs(monkeypatch, profile, bodies={POLICY_ID: "# Mail rules\n\nPrioritize manuscript matters."})
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
     requests = [
         (
@@ -252,9 +281,7 @@ def test_mail_triage_app_action_accepts_only_relay_v2_evidence(
     monkeypatch, capsys, tmp_path: Path
 ) -> None:
     profile = tmp_path / "profile"
-    policy = profile / "policies" / "mail-triage.md"
-    policy.parent.mkdir(parents=True)
-    policy.write_text("# Mail rules\n\n投稿论文优先。", encoding="utf-8")
+    configure_knowledge_inputs(monkeypatch, profile, bodies={POLICY_ID: "# Mail rules\n\n投稿论文优先。"})
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
     code, response = run_cli(
         monkeypatch,
@@ -482,7 +509,8 @@ def test_create_action_stays_available_with_same_ref_row_updates_and_empty_pages
     assert str(UUID(generated)) == generated
     assert not WorkspaceStore().path.exists()
     code, response = handle_request({"schema_version": REQUEST_SCHEMA, "operation": "execute", "ref": action_ref,
-                                     "input": create[0]["input"] | fields | {"source_refs": ["source://synthetic"]}})
+                                     "input": create[0]["input"] | fields | {"source_refs": ["source://synthetic"],
+                                         "source_versions": {"owner.synthetic": "sha256:" + "a" * 64}}})
     assert code == 0, response
     data = read_collection(ref)["data"]
     assert data["collection_actions"][0]["action_ref"] == action_ref
@@ -504,7 +532,8 @@ def test_create_action_stays_available_with_same_ref_row_updates_and_empty_pages
 def test_people_search_combines_local_and_relay_projection_before_pagination_without_external_actions(monkeypatch):
     store = WorkspaceStore()
     store.update_person(person_id="local:one", display_name="Local researcher", summary="Synthetic relationship",
-                        aliases=["共同比较"], source_refs=["source://local"], expected_digest="absent")
+                        aliases=["共同比较"], source_refs=["source://local"],
+                        source_versions={"owner.synthetic": "sha256:" + "a" * 64}, expected_digest="absent")
     monkeypatch.setattr("opl_persona.workspace.relay_read", lambda ref, value, paths: {
         "state": "ready", "package_id": "opl-relay", "ref": ref,
         "items": [{"id": "external", "display_name": "共同比较 Researcher", "source_refs": ["source://relay"],
@@ -522,7 +551,8 @@ def test_memory_filters_do_not_change_approved_only_working_context(monkeypatch)
     store = WorkspaceStore()
     for status in ("approved", "candidate", "forgotten"):
         item = store.update_memory(memory_id=f"memory:{status}", title=f"Research {status}", summary=f"Context {status}",
-            memory_kind="fact", person_ids=[], context_ids=[], source_refs=[f"source://{status}"], expected_digest="absent")
+            memory_kind="fact", person_ids=[], context_ids=[], source_refs=[f"source://{status}"],
+            source_versions={"owner.synthetic": "sha256:" + "a" * 64}, expected_digest="absent")
         if status != "candidate":
             store.review_memory(memory_id=item["id"], status=status, approval_ref=f"approval://user/{status}", expected_digest=item["digest"])
     monkeypatch.setattr("opl_persona.workspace.relay_read", lambda ref, value, paths: {
@@ -531,7 +561,7 @@ def test_memory_filters_do_not_change_approved_only_working_context(monkeypatch)
                    "status": status, "source_refs": [f"source://relay/{status}"]} for status in ("approved", "candidate", "forgotten")]})
     data = read_collection("personal.memory.v1#memories", {"query": "research", "offset": 2, "limit": 1})["data"]
     assert data["pagination"] == {"offset": 2, "limit": 1, "total": 4, "has_more": True}
-    assert data["memory_policy"] == "approved_only_for_context"
+    assert data["memory_policy"] == "approved_and_current_sources_only"
     all_items = read_collection("personal.memory.v1#memories", {"status": "all"})["data"]["items"]
     assert len(all_items) == 6
     candidates = read_collection("personal.memory.v1#memories", {"status": "candidate"})["data"]

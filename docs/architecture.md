@@ -16,9 +16,10 @@ because they are documented.
 
 Framework owns the shared Profile Workspace selector, marker and initialization
 mechanics in `python/opl_framework/profile_workspace.py`. The installed Persona
-carrier includes its byte-for-byte generated `_opl_profile_workspace.py`, so it
-requires no Framework runtime installation. Persona retains its templates,
-resource bindings and private state. Regenerate the module with Framework's
+carrier includes its byte-for-byte generated `_opl_profile_workspace.py`, so
+workspace initialization has no Framework Python dependency. Derived knowledge
+validation calls the installed Framework CLI. Persona retains its templates,
+note-adapter resource bindings and private state. Regenerate the module with Framework's
 `scripts/materialize-python-support.mjs --module profile_workspace --target
 plugins/opl-persona/runtime/opl_persona/_opl_profile_workspace.py`; run
 `OPL_FRAMEWORK_ROOT=<framework-checkout> make test` to check the projection bytes.
@@ -29,9 +30,15 @@ store, knowledge vault, or website CMS.
 | Surface | Authority |
 | --- | --- |
 | OPL Relay | mail identities, raw mail evidence, memory evidence, drafts, send receipts |
-| Obsidian | private notes, memo content, and all user-maintained personal profile values |
+| User-selected knowledge source | canonical personal notes and profile values in Obsidian or a normal Markdown directory |
 | `gflab_web` | public publication/news content and deployment |
-| OPL Persona | shared PI context, provenance, proposal shape, approval state |
+| OPL Persona | derived PI context, source-version dependencies, proposal shape, approval state |
+
+The family-wide source, scope and lifecycle rules belong to the
+[Framework knowledge source and memory policy](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md).
+Framework owns common source registration, grants, resolution and validity
+checks. Persona is a consumer of those mechanisms, not a mandatory gateway for
+other agents or another canonical personal knowledge store.
 
 ## Current exported surfaces
 
@@ -82,14 +89,45 @@ personal.inbox.v1#recent
 
 Working modes are `academic-mail`, `technical-memo`, `academic-website`, and
 `research-writing`, with localized labels/summaries, guidance, provenance and digests.
-`context.select` persists the mode; `context.update` requires its current digest
-and source refs. Modes guide drafting, not permission. The contexts read returns
-`active_context` assembled from approved memories only. `person.update` and
-`memory.update` require `expected_digest=absent` for creation or the current
-digest for replacement. A memory edit always resets it to `candidate`.
+`context.select` persists the mode; `context.update` requires its current digest,
+source refs and `source_versions`. Modes guide drafting, not permission. The
+contexts read returns `active_context` assembled from approved memories whose
+source dependencies remain valid. `person.update` and `memory.update` require
+`expected_digest=absent` for creation or the current digest for replacement,
+and the same source-version binding. A memory edit always resets it to `candidate`.
 `memory.review` binds memory identity/digest, a user review ref, and a decision
 (`approved`, `candidate`, `forgotten`). Management defaults to candidate and
-approved entries; `status=all` includes forgotten records.
+approved entries; `status=all` includes forgotten records. This review state
+does not replace a fresh source check.
+
+`source_versions` is a non-empty object mapping accepted knowledge identities
+to exact `sha256:...` revisions. For people, memories and customized modes,
+Persona stores a derived summary plus these dependencies in
+`opl-persona-workspace.v2`. It delegates source validation to:
+
+```bash
+opl knowledge verify-dependencies --workspace <Profile> --domain persona \
+  --dependencies <array-json-file> --json
+```
+
+The private input array contains `{knowledge_id, sha256}` objects; the returned
+verdict is body-free. Approval and context assembly require current, authorized
+source versions. Missing, expired, drifted or revoked dependencies exclude the
+derived item and appear in `excluded_knowledge`. An unavailable verifier also
+excludes the item. Management views hide invalid summary content while keeping
+the stored record available for repair; they do not delete the original record.
+Built-in product modes are checked against their shipped content and do not
+require personal-source bindings.
+
+New independent preferences must first be accepted in the user's selected
+canonical source, then referenced by Persona. A textual `source_ref` alone is
+provenance, not proof of source currentness or permission. Resource Bindings
+for note adapters do not substitute for Framework knowledge grants.
+
+`workspace-migrate` performs the explicit one-time v1 to v2 conversion. It
+backs up the original JSON, preserves records, and marks non-product records
+for source review. Existing approvals cannot admit those records into current
+context until their source dependencies have been supplied and checked.
 
 Relay mail memory is read through `opl app contribution read --package-id
 opl-relay` at `personal.memory.v1#people` and `#search`, with the same Profile
@@ -97,6 +135,10 @@ selector. Approved bounded evidence is not persisted by Persona. Missing Relay
 availability is a local diagnostic in a ready Persona read model; there is no
 database fallback. Cross-source derived state lives in `data/persona/workspace.json`.
 Names and aliases alone do not automatically merge source identities.
+Persona requires Relay's `source_policy.source_currentness_checked` and
+`only_approved_memory_included` claims, then checks each approved summary's
+`source_currentness` record. Stale summaries are excluded; currentness metadata
+is preserved in the projection instead of treating approval as permanent validity.
 
 ### Collection read-model
 
@@ -151,6 +193,14 @@ never persisted, and confers no write authority. Obsidian authorize/apply still
 belongs to the existing Persona owner adapter with its independent review,
 resource binding and exact-digest checks.
 
+Knowledge-dependent proposal rows retain their exact `payload.source_versions`
+and expose a fresh `source_verification`. Approval rechecks those dependencies;
+a stale proposal remains historical review evidence but cannot gain approval
+until its source interpretation is regenerated. The Obsidian author adapter
+does not accept a new Framework knowledge revision: editing a registered note
+changes its bytes, so the resolver requires a separate `review-source` readback
+before the revised note can enter current context.
+
 All CLI proposal builders and the existing three App propose actions persist
 to `data/persona/proposals.json`. Capture/triage also stage Persona-local Inbox
 captures through `inbox.py`. Replaying identical proposals preserves review
@@ -172,11 +222,20 @@ references, and `approval.external_write_allowed=false`. An adapter can execute
 only an exact user-approved proposal. A proposal is not a published website
 change, sent email, or written vault note.
 
+An authorized maintainer may perform the review and record existing user
+authority when it covers the exact target and payload. This does not require
+repeated confirmation; missing or expanded authority does. Semantic acceptance,
+the adapter's resource grant and the final readback remain distinct records.
+
 ## Inbox and Obsidian proposal contracts
 
 `mail.triage` consumes one validated Relay facts envelope, an agent assessment
 bound to the same email reference, and Persona's private policy/context
-snapshots. It validates the decision and produces a reviewable proposal and a refs-only
+snapshots. The refs-only `data/persona/knowledge-inputs.json` maps the four
+roles `identity`, `team`, `projects`, and `mail_policy` to accepted Framework
+knowledge IDs. All selected sources pass the current-source reader; existing
+files may be registered in place. It validates the decision and produces a
+reviewable proposal and a refs-only
 Inbox capture; missing evidence fails closed. Policy loading, content digests
 and recipient interpretation belong to [Mail Policy](mail-policy.md).
 Persona never treats the Relay refs-set digest as its own policy-content
@@ -228,9 +287,12 @@ App consumption and review requirements belong to
 The private binding store is
 `<profile>/data/persona/resource-bindings.json`. It holds opaque refs, scopes,
 policy metadata, and health metadata; it never holds credentials or authority
-content. The current CLI can set and check only an Obsidian directory binding,
-with `knowledge.obsidian.v1` or `knowledge.documents.v1` as the capability. The
-health check proves directory reachability only. `bindings.py` owns
+content. The CLI can set and check `obsidian` directory bindings using
+`knowledge.obsidian.v1` or `knowledge.documents.v1`, and `markdown` directory
+bindings using `knowledge.documents.v1`. The health check proves directory
+reachability only. The existing note writer remains an Obsidian-specific owner
+adapter; a Markdown directory binding does not invent another write action.
+`bindings.py` owns
 `opl-persona-resource-binding.v1` and `opl-persona-resource-health.v1`; health
 values are `healthy`, `degraded`, `unavailable`, or `unknown`. A stored health
 observation must not be used as a fresh authorization or content readback.
@@ -250,6 +312,13 @@ stores its machine-maintained state under `<workspace>/data/persona`; Relay
 uses the sibling `<workspace>/data/relay`. When unset, Persona uses
 `~/OPL/profiles/<user>` and its `data/persona` child. The
 repository, installed plugin, and Package are never data authorities.
+
+`setup init` creates control directories and handling policies. It leaves
+personal identity and preference bodies untouched; `--local-knowledge`
+explicitly creates missing local templates when this workspace is the chosen
+canonical home. Existing external sources stay in place. Setup readiness has
+the scope `runtime_configuration` and does not claim complete personal data,
+valid knowledge grants or business readiness.
 
 CLI mutations, including setup and binding changes, share
 `data/persona/.workspace.lock`. POSIX uses `flock`; Windows uses a stable
