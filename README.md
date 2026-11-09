@@ -223,3 +223,12 @@ checks in addition to the test suite.
 ## License
 
 OPL Persona is available under the [Apache License 2.0](./LICENSE).
+
+Registered note revisions use Framework `knowledge propose/review/apply` through
+`knowledge_writeback` on the note proposal. New note sources may include
+`knowledge_registration:{registry_ref,item}`; the adapter writes the unique body
+then Framework registers its exact accepted revision. Authorization supplies
+`knowledge_review:{reviewer,reviewed_at,next_review_at}`. Ordinary unregistered
+Markdown remains supported. Evidence references stay in proposals and receipts;
+the renderer adds no source or tag frontmatter. See [Architecture](docs/architecture.md)
+for the fields and recovery boundary.

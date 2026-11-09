@@ -200,3 +200,23 @@ def test_modified_default_fields_cannot_bypass_source_review_during_migration(st
     assert item[field] == value
     assert store.context()["context"]["guidance"] == {}
     assert store.context()["excluded_knowledge"][0]["id"] == item["id"]
+
+
+def test_project_is_forwarded_to_reads_and_verification(store, monkeypatch):
+    monkeypatch.setenv("OPL_PROJECT_ROOT", "/private/projects/synthetic")
+    seen = []
+    def run(argv, **kwargs):
+        seen.append(argv)
+        assert argv[argv.index("--project") + 1] == "/private/projects/synthetic"
+        if "read-source" in argv:
+            body = "# Synthetic\n"
+            source = {"knowledge_id": "owner.test", "content": body, "source_ref": "test.md",
+                      "sha256": "sha256:" + hashlib.sha256(body.encode()).hexdigest()}
+            result = {"knowledge_source": source}
+        else:
+            result = {"knowledge_dependencies": {"valid": True, "issues": []}}
+        return subprocess.CompletedProcess(argv, 0, json.dumps({"version": "g2", **result}), "")
+    monkeypatch.setattr(subprocess, "run", run)
+    read_knowledge_source("owner.test", store.paths)
+    assert verify_knowledge_dependencies(VERSIONS, store.paths)["valid"]
+    assert len(seen) == 2

@@ -29,10 +29,14 @@ four roles. This file contains references only:
     "identity": ["owner.identity"],
     "team": ["owner.team"],
     "projects": ["owner.projects"],
-    "mail_policy": ["owner.mail-policy"]
+    "mail_policy": ["owner.mail-policy", "owner.reply-drafting-policy"]
   }
 }
 ```
+
+Reply-drafting policy is registered in place and selected as another `mail_policy`
+ID. It participates in the same source-version map and content digest; its local
+filename is not an implicit authority.
 
 Only these role names and lists of unique knowledge IDs are accepted. An empty
 or omitted `identity`, `team`, or `projects` role means that those facts are

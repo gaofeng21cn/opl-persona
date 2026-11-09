@@ -12,6 +12,11 @@ from opl_persona.core import build_obsidian_note_proposals
 from opl_persona.obsidian_apply import apply_approved_obsidian_note
 
 
+@pytest.fixture(autouse=True)
+def isolated_profile(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
+
+
 def digest(value: bytes) -> str:
     return f"sha256:{hashlib.sha256(value).hexdigest()}"
 
@@ -66,8 +71,8 @@ def test_approved_create_is_atomic_and_returns_authority_readback(tmp_path: Path
     content = note.read_text(encoding="utf-8")
     assert content.startswith("---\n")
     assert 'title: "Technical memo"' in content
-    assert "tags: [\"technical-memo\"]" in content
-    assert "source_refs: [\"paper://doi/10.1000/example\"]" in content
+    assert "tags:" not in content
+    assert "source_refs:" not in content
     assert "# Technical memo\n\nEvidence-backed content." in content
     assert "## Links\n\n- [[Related note]]" in content
     assert receipt["status"] == "applied"
@@ -227,7 +232,7 @@ def test_apply_rejects_tampered_proposal_wrong_binding_and_non_external_approval
         external_write_allowed=True,
     )
     approved["payload"]["body"] = "# Tampered"
-    with pytest.raises(ValueError, match="proposal_digest"):
+    with pytest.raises(ValueError, match="proposal_digest|proposal identity"):
         apply_approved_obsidian_note(
             approved,
             approved["approval"],
