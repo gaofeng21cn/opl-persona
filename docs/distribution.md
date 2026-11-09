@@ -27,8 +27,9 @@ GHCR payload、原生 carrier installed bytes、Framework projection 与 OPL App
 `<profile>/data/relay`。二者通过 `OPL_PROFILE_WORKSPACE` 选择同一个分身，不能各自引入
 第二个数据根。
 
-Obsidian 知识库和网站仓库继续保留在用户选定的外部位置。Persona 只保存受控资源绑定
-（Resource Binding）、来源证据和提案状态，不复制知识库、网站检出目录、邮件正文、账户凭据
+Obsidian、普通知识目录和网站仓库继续保留在用户选定的位置；本地正文仅在用户选择工作区
+为主源时创建。Persona 保存受控资源绑定（Resource Binding）、带来源版本的派生上下文、
+来源证据和提案状态，不复制知识库、网站检出目录、邮件正文、账户凭据
 或外部系统的审批正文；Persona 自己的 proposal 与批准记录仍归其私有数据目录。
 
 ## 当前可用分发

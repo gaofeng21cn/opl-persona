@@ -17,7 +17,7 @@ from .core import (
 )
 from .paths import PersonaPaths
 from .proposals import ProposalStore
-from .workspace import workspace_lock
+from .workspace import WorkspaceStore, workspace_lock
 from .obsidian import memo_proposals_from_file
 from .bindings import (
     DEFAULT_OBSIDIAN_BINDING_ID,
@@ -57,12 +57,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="reserved for CLI compatibility")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor")
-    sub.add_parser("workspace-init")
+    sub.add_parser("workspace-migrate", help="将旧工作区记录保留备份并标记为待来源复核")
+    workspace_init = sub.add_parser("workspace-init")
+    workspace_init.add_argument("--local-knowledge", action="store_true", help="选择本工作区为个人正文主源并创建缺失模板")
     setup = sub.add_parser("setup", help="检查或初始化 Profile Workspace")
     setup_actions = setup.add_subparsers(dest="setup_action", required=True)
     setup_status = setup_actions.add_parser("status", help="显示首次配置步骤")
     setup_status.set_defaults(setup_handler="status")
-    setup_init = setup_actions.add_parser("init", help="创建缺失的 Profile 模板")
+    setup_init = setup_actions.add_parser("init", help="创建缺失的 Profile 控制目录")
+    setup_init.add_argument("--local-knowledge", action="store_true", help="选择本工作区为个人正文主源并创建缺失模板")
     setup_init.set_defaults(setup_handler="init")
     binding = sub.add_parser("binding", help="管理 Profile Workspace 资源绑定")
     binding_actions = binding.add_subparsers(dest="binding_action", required=True)
@@ -70,11 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
     binding_list.set_defaults(binding_handler="list")
     binding_set = binding_actions.add_parser("set", help="绑定一个本地资源目录")
     binding_set.add_argument("--id", required=True, dest="binding_id")
-    binding_set.add_argument("--provider", required=True, choices=["obsidian"])
+    binding_set.add_argument("--provider", required=True, choices=["obsidian", "markdown"])
     binding_set.add_argument("--path", required=True, help="资源目录；只保存为 file URI")
     binding_set.add_argument(
         "--capability-id",
-        default="knowledge.obsidian.v1",
+        default="knowledge.documents.v1",
         choices=["knowledge.obsidian.v1", "knowledge.documents.v1"],
     )
     binding_set.add_argument("--scope", action="append", default=["notes.read"])
@@ -129,12 +132,14 @@ def main(argv: list[str] | None = None) -> int:
             return code
         if args.command == "doctor":
             result = paths.doctor()
+        elif args.command == "workspace-migrate":
+            result = {"ok": True, "migration": WorkspaceStore(paths).migrate_workspace()}
         elif args.command == "workspace-init":
             with workspace_lock(paths):
-                result = paths.init_workspace()
+                result = paths.init_workspace(local_knowledge=args.local_knowledge)
         elif args.command == "setup":
             with workspace_lock(paths):
-                result = paths.setup_status() if args.setup_handler == "status" else paths.init_workspace()
+                result = paths.setup_status() if args.setup_handler == "status" else paths.init_workspace(local_knowledge=args.local_knowledge)
             result = {"ok": True, "setup": result}
         elif args.command == "binding":
             if args.binding_handler == "list":

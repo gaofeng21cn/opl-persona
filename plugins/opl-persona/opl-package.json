@@ -3,7 +3,7 @@
   "package_id": "opl-persona",
   "display_name": "OPL Persona",
   "publisher": "one-person-lab",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "source": "first_party",
   "package_role": "capability_package",
   "source_repo": "https://github.com/gaofeng21cn/opl-persona",
@@ -51,6 +51,7 @@
       "runtime/opl_persona/cli.py",
       "runtime/opl_persona/core.py",
       "runtime/opl_persona/inbox.py",
+      "runtime/opl_persona/knowledge.py",
       "runtime/opl_persona/obsidian.py",
       "runtime/opl_persona/obsidian_apply.py",
       "runtime/opl_persona/paths.py",
@@ -61,7 +62,7 @@
       "skills/opl-persona/agents/openai.yaml",
       "runtime/opl_persona/_opl_profile_workspace.py"
     ],
-    "digest": "sha256:13e5ac9c0d51a454de0fc508ccca0a900b22a3645c36420e973da4c73eedcf61"
+    "digest": "sha256:9ce1a632e342cf5d0b2382f2bbbf72b3b4116dff40103138524e8e8399dba721"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

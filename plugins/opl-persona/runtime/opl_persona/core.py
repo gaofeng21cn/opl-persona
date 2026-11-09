@@ -223,11 +223,11 @@ def _relay_v2_evidence(payload: Mapping[str, Any]) -> dict[str, Any]:
 _MAX_TRIAGE_SUMMARY = 4096
 
 
-def _policy_provenance() -> tuple[list[str], str]:
-    """Load every Markdown rule from the one Profile Workspace or fail closed."""
+def _policy_provenance() -> tuple[list[str], str, dict[str, str]]:
+    """Load selected accepted rules and preserve their exact source versions."""
 
     snapshot = load_markdown_policies(workspace=PersonaPaths.resolve().workspace)
-    return list(snapshot.refs), snapshot.digest
+    return list(snapshot.refs), snapshot.digest, snapshot.source_versions
 
 
 def _mail_context_provenance() -> MailContextSnapshot:
@@ -599,10 +599,15 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
     relay = _relay_v2_evidence(payload)
     email_ref = relay["email_ref"]
     source_refs = relay["source_refs"]
-    policy_refs, policy_digest = _policy_provenance()
+    policy_refs, policy_digest, policy_source_versions = _policy_provenance()
     subject = relay["subject"]
     summary = relay["summary"]
     mail_context = _mail_context_provenance()
+    source_versions = dict(policy_source_versions)
+    for identifier, revision in mail_context.source_versions.items():
+        if identifier in source_versions and source_versions[identifier] != revision:
+            raise ValueError(f"mail policy and context have conflicting source revisions: {identifier}")
+        source_versions[identifier] = revision
     manuscript_context = resolve_manuscript_context(
         mail_context,
         subject=subject,
@@ -622,6 +627,7 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
         uncertainty += " 实际第一作者或团队成员匹配信息不完整。"
     triage_payload = {
         "email_ref": email_ref,
+        "source_versions": source_versions,
         "classification": assessment["classification"],
         "priority": assessment["priority"],
         "rationale": assessment["rationale"],
@@ -642,6 +648,7 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
             "policy_refs": policy_refs,
             "policy_digest": policy_digest,
             "policy_digest_kind": "content",
+            "policy_source_versions": policy_source_versions,
             "relay_policy_refs": relay["relay_policy_refs"],
             "relay_policy_digest": relay["relay_policy_digest"],
             "relay_policy_digest_scope": RELAY_POLICY_DIGEST_SCOPE,
@@ -649,6 +656,7 @@ def build_mail_triage_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
             "context_refs": list(mail_context.refs),
             "context_digest": mail_context.digest,
             "context_digest_kind": "content",
+            "context_source_versions": dict(mail_context.source_versions),
             "manuscript_alias": manuscript_context.get("manuscript_alias"),
             "decision_scope": "proposal_only",
         }

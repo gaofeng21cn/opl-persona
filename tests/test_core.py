@@ -1,4 +1,5 @@
 import copy
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -11,8 +12,10 @@ from opl_persona.core import (
     build_publication_proposals,
 )
 from opl_persona.policy import load_markdown_policies
+from opl_persona.approvals import proposal_digest
 
 from relay_v2 import mail_assessment, relay_v2_evidence
+from knowledge_inputs import POLICY_BODY, POLICY_ID, POLICY_REF, configure_knowledge_inputs
 
 
 def sha256(value: str) -> str:
@@ -62,46 +65,36 @@ def test_inputs_require_provenance() -> None:
         raise AssertionError("missing provenance must fail closed")
 
 
-def _write_policy(tmp_path: Path) -> Path:
+def _write_policy(tmp_path: Path, monkeypatch) -> Path:
     profile = tmp_path / "profile"
-    policy = profile / "policies" / "mail-triage.md"
-    policy.parent.mkdir(parents=True)
-    policy.write_text("# Mail rules\n\nPrioritize manuscript matters.", encoding="utf-8")
+    configure_knowledge_inputs(monkeypatch, profile)
     return profile
 
 
-def _write_routing_context(profile: Path) -> None:
-    mail_profile = profile / "profile" / "mail-profile.md"
-    mail_profile.parent.mkdir(parents=True)
-    mail_profile.write_text(
-        "# Mail Profile\n\n- owner: Feng Gao\n"
-        "- addresses: gaof57@mail.sysu.edu.cn, gaofeng21cn@gmail.com\n",
-        encoding="utf-8",
-    )
-    people = profile / "context" / "people.md"
-    people.parent.mkdir(parents=True)
-    people.write_text(
-        "# People\n\n"
-        "| Name | Group | Public email |\n"
-        "| --- | --- | --- |\n"
-        "| Yin-Meng Zhang | Student | ymzhang1997@outlook.com |\n",
-        encoding="utf-8",
-    )
-    projects = profile / "context" / "projects.md"
-    projects.write_text(
-        "# Projects\n\n"
-        "## Spectrum00815-26R1\n\n"
-        "- title: Integrative Multi-Omics Profiling of Insomnia-Related Molecular Features\n"
-        "- actual first author: Yin-Meng Zhang\n"
-        "- verified routing address: yinmeng23@mails.jlu.edu.cn\n",
-        encoding="utf-8",
-    )
+def _write_routing_context(profile: Path, monkeypatch) -> None:
+    configure_knowledge_inputs(monkeypatch, profile, roles={
+        "mail_policy": [POLICY_ID], "identity": ["owner.identity"],
+        "team": ["owner.team"], "projects": ["owner.projects"],
+    }, bodies={
+        POLICY_ID: POLICY_BODY,
+        "owner.identity": "# Mail Profile\n\n- owner: Feng Gao\n"
+            "- addresses: gaof57@mail.sysu.edu.cn, gaofeng21cn@gmail.com\n",
+        "owner.team": "# People\n\n"
+            "| Name | Group | Public email |\n"
+            "| --- | --- | --- |\n"
+            "| Yin-Meng Zhang | Student | ymzhang1997@outlook.com |\n",
+        "owner.projects": "# Projects\n\n"
+            "## Spectrum00815-26R1\n\n"
+            "- title: Integrative Multi-Omics Profiling of Insomnia-Related Molecular Features\n"
+            "- actual first author: Yin-Meng Zhang\n"
+            "- verified routing address: yinmeng23@mails.jlu.edu.cn\n",
+    })
 
 
 def test_mail_triage_captures_personal_inbox_and_policy_bound_decision(
     monkeypatch, tmp_path: Path
 ) -> None:
-    profile = _write_policy(tmp_path)
+    profile = _write_policy(tmp_path, monkeypatch)
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
     evidence = relay_v2_evidence()
     email_ref = evidence["source_refs"][0]
@@ -118,7 +111,7 @@ def test_mail_triage_captures_personal_inbox_and_policy_bound_decision(
     assert capture["payload"]["source_refs"] == [email_ref]
     assert triage["proposal_kind"] == "mail.triage"
     assert triage["source_refs"] == [email_ref]
-    assert triage["policy_refs"] == ["policy://persona/mail-triage/v1"]
+    assert triage["policy_refs"] == [POLICY_REF]
     assert triage["policy_digest"] == load_markdown_policies(workspace=profile).digest
     assert triage["policy_digest"] != evidence["policy"]["policy_digest"]
     assert triage["relay_policy_digest"] == evidence["policy"]["policy_digest"]
@@ -128,6 +121,53 @@ def test_mail_triage_captures_personal_inbox_and_policy_bound_decision(
     assert triage["payload"]["priority"] == "high"
     assert triage["payload"]["to"] == [{"email": "gaof57@mail.sysu.edu.cn", "name": "Feng Gao"}]
     assert all(item["approval"]["external_write_allowed"] is False for item in result["proposals"])
+
+
+def test_mail_proposal_binds_exact_policy_and_context_source_revisions(monkeypatch, tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    identity = "# Identity\n\n- addresses: gaof57@mail.sysu.edu.cn\n"
+    bodies = {POLICY_ID: POLICY_BODY, "owner.identity": identity}
+    configure_knowledge_inputs(monkeypatch, profile, roles={
+        "mail_policy": [POLICY_ID], "identity": ["owner.identity"],
+    }, bodies=bodies)
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
+    evidence = relay_v2_evidence()
+    triage = build_mail_triage_proposals({
+        "relay_evidence": evidence, "assessment": mail_assessment(evidence),
+    })["proposals"][1]
+
+    for field, identifier in (("policy_source_versions", POLICY_ID),
+                              ("context_source_versions", "owner.identity")):
+        revision = "sha256:" + hashlib.sha256(bodies[identifier].encode("utf-8")).hexdigest()
+        assert triage[field] == {identifier: revision}
+        changed = copy.deepcopy(triage)
+        changed[field][identifier] = "sha256:" + "f" * 64
+        assert proposal_digest(changed) != proposal_digest(triage)
+    assert triage["payload"]["source_versions"] == {
+        identifier: "sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()
+        for identifier, body in bodies.items()
+    }
+
+
+def test_mail_proposal_rejects_one_source_read_at_conflicting_revisions(monkeypatch, tmp_path: Path) -> None:
+    profile = tmp_path / "profile"
+    configure_knowledge_inputs(monkeypatch, profile, roles={
+        "mail_policy": [POLICY_ID], "identity": [POLICY_ID],
+    })
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
+    bodies = iter([POLICY_BODY, "# Updated rules and identity\n- addresses: owner@example.com\n"])
+
+    def changing_source(identifier, paths):
+        body = next(bodies)
+        return {"knowledge_id": identifier, "source_ref": POLICY_REF, "content": body,
+                "sha256": "sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()}
+
+    monkeypatch.setattr("opl_persona.policy.read_knowledge_source", changing_source)
+    evidence = relay_v2_evidence()
+    with pytest.raises(ValueError, match="conflicting source revisions"):
+        build_mail_triage_proposals({
+            "relay_evidence": evidence, "assessment": mail_assessment(evidence),
+        })
 
 
 @pytest.mark.parametrize(
@@ -143,8 +183,8 @@ def test_mail_triage_resolves_first_author_routing_from_profile_context(
     cc: str,
     expected_action: str,
 ) -> None:
-    profile = _write_policy(tmp_path)
-    _write_routing_context(profile)
+    profile = _write_policy(tmp_path, monkeypatch)
+    _write_routing_context(profile, monkeypatch)
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(profile))
     evidence = relay_v2_evidence(
         subject="Spectrum00815-26R1 production query",
@@ -197,7 +237,7 @@ def test_mail_triage_resolves_first_author_routing_from_profile_context(
 def test_mail_triage_fails_closed_for_invalid_relay_v2_bridge(
     monkeypatch, tmp_path: Path, mutate, message: str
 ) -> None:
-    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path)))
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path, monkeypatch)))
     evidence = relay_v2_evidence()
     mutate(evidence)
     with pytest.raises(ValueError, match=message):
@@ -205,7 +245,7 @@ def test_mail_triage_fails_closed_for_invalid_relay_v2_bridge(
 
 
 def test_mail_triage_rejects_scattered_headers_and_external_digest(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path)))
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path, monkeypatch)))
     with pytest.raises(ValueError, match="relay_evidence and assessment inputs"):
         build_mail_triage_proposals(
             {
@@ -215,15 +255,15 @@ def test_mail_triage_rejects_scattered_headers_and_external_digest(monkeypatch, 
         )
 
 
-def test_mail_triage_fails_closed_without_persona_markdown(monkeypatch, tmp_path: Path) -> None:
+def test_mail_triage_fails_closed_without_knowledge_inputs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "empty-profile"))
-    with pytest.raises(FileNotFoundError, match="no Markdown policies"):
+    with pytest.raises(FileNotFoundError, match="knowledge inputs are not configured"):
         evidence = relay_v2_evidence()
         build_mail_triage_proposals({"relay_evidence": evidence, "assessment": mail_assessment(evidence)})
 
 
 def test_mail_triage_uses_evidence_bound_assessment_not_subject_keywords(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path)))
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path, monkeypatch)))
     evidence = relay_v2_evidence(subject="Newsletter about a manuscript deadline")
     assessment = mail_assessment(
         evidence,
@@ -240,7 +280,7 @@ def test_mail_triage_uses_evidence_bound_assessment_not_subject_keywords(monkeyp
 
 
 def test_mail_triage_rejects_assessment_for_another_message(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path)))
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(_write_policy(tmp_path, monkeypatch)))
     evidence = relay_v2_evidence()
     assessment = mail_assessment(evidence, email_ref="email-store://sysu/INBOX/456/0123456789abcdef")
     with pytest.raises(ValueError, match="assessment.email_ref"):

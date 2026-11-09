@@ -17,24 +17,18 @@ from ._opl_profile_workspace import (
 _TEMPLATES: dict[str, str] = {
     "AGENTS.md": """# Profile Workspace
 
-This directory belongs to one person's OPL digital persona. Keep private
-identity, policies, context, and module state here; do not copy it into a
-Package or Plugin directory.
-""",
-    "profile/identity.md": """# Identity
+This directory holds one person's private OPL control state and task context.
+Existing personal knowledge remains in its selected source. Create local
+knowledge bodies only when this workspace is their canonical home; do not copy
+personal knowledge into a Package or Plugin directory.
 
-Fill in the minimum identity facts that Codex may use for drafting.
-
-- name:
-- role:
-- institution:
-- preferred_language: zh-CN
-""",
-    "profile/preferences.md": """# Preferences
-
-- draft_review: required
-- external_writes: proposal_only
-- mail_send: user_approval_required
+The user owns personal knowledge bodies. Persona owns derived context,
+interpretation and reviewable proposals, not the maintenance authority of the
+source. Framework manages source registration and version mechanics;
+`data/knowledge-sources.json` may hold the single private source registry, and
+`shared/memory/knowledge-bindings.json` selects explicit sources and scopes.
+These files contain references and review metadata, never a second knowledge
+body. Other workspaces bind the same registry instead of copying its state.
 """,
     "policies/mail-triage.md": """# Mail triage
 
@@ -43,13 +37,36 @@ never send, archive, move, delete, or mark mail without explicit approval.
 """,
     "policies/knowledge.md": """# Knowledge output
 
-Use source references for every proposed note. Keep Obsidian writes reviewable
-and preserve the user's existing note when the expected digest changes.
+Use source references for every proposed note. Keep writes to the selected
+knowledge source reviewable and preserve existing notes when their expected
+digest changes. A resource binding identifies a source; it does not copy its
+body into this workspace or authorize a write.
 """,
     "policies/website.md": """# Website output
 
 Prepare website changes as reviewable proposals. The website repository remains
 the authority for its own content and publication state.
+""",
+}
+
+_LOCAL_KNOWLEDGE_TEMPLATES: dict[str, str] = {
+    "profile/identity.md": """# Identity
+
+This is the canonical local identity note when no existing source is selected.
+Fill in the minimum identity facts needed for drafting.
+
+- name:
+- role:
+- institution:
+- preferred_language: zh-CN
+""",
+    "profile/preferences.md": """# Preferences
+
+This is the canonical local preferences note when no existing source is selected.
+
+- draft_review: required
+- external_writes: proposal_only
+- mail_send: user_approval_required
 """,
 }
 
@@ -80,7 +97,7 @@ class PersonaPaths:
             **self.setup_status(),
             "private_data_policy": "runtime_roots_only",
             "source_checkout_is_data_authority": False,
-            "obsidian_binding_required": True,
+            "external_knowledge_binding_required": False,
         }
 
     def setup_status(self) -> dict[str, Any]:
@@ -92,7 +109,7 @@ class PersonaPaths:
             "profile.identity": self.workspace / "profile" / "identity.md",
             "profile.preferences": self.workspace / "profile" / "preferences.md",
             "policy.mail": self.workspace / "policies" / "mail-triage.md",
-            "binding.obsidian": self.data_root / "resource-bindings.json",
+            "binding.knowledge": self.data_root / "resource-bindings.json",
         }
         identity_ready = False
         identity_path = paths["profile.identity"]
@@ -105,7 +122,7 @@ class PersonaPaths:
             except (OSError, UnicodeDecodeError):
                 identity_ready = False
         binding_ready = False
-        binding_path = paths["binding.obsidian"]
+        binding_path = paths["binding.knowledge"]
         if binding_path.is_file():
             try:
                 payload = json.loads(binding_path.read_text(encoding="utf-8"))
@@ -118,13 +135,15 @@ class PersonaPaths:
                 identity_ready
                 if step_id == "profile.identity"
                 else binding_ready
-                if step_id == "binding.obsidian"
+                if step_id == "binding.knowledge"
                 else path.is_file()
             )
+            required = step_id in {"workspace", "policy.mail"}
             steps.append(
                 {
                     "id": step_id,
-                    "status": "ready" if configured else "required",
+                    "status": "ready" if configured else "required" if required else "optional",
+                    "required": required,
                     "path": str(path),
                 }
             )
@@ -140,21 +159,25 @@ class PersonaPaths:
             for item in required
             if item["id"] == "workspace"
         ]
-        if any(item["id"] == "profile.identity" and item["status"] == "required" for item in required):
-            next_actions.append("填写 Profile Workspace/profile/identity.md")
-        if any(item["id"] == "binding.obsidian" and item["status"] == "required" for item in required):
-            next_actions.append("opl-persona --json binding set --id my-knowledge --provider obsidian --path <vault>")
         return {
             "workspace_marker": str(marker),
             "workspace_ready": marker.is_file(),
             "readiness": readiness,
+            "readiness_scope": "runtime_configuration",
             "steps": steps,
             "next_actions": next_actions,
+            "knowledge_setup": {
+                "required": False,
+                "local_templates_command": "opl-persona --json setup init --local-knowledge",
+                "binding_command": "opl-persona --json binding set --id my-knowledge --provider <obsidian|markdown> --path <directory>",
+                "policy": "Keep one canonical body; use an existing source or opt into local notes.",
+            },
         }
 
-    def init_workspace(self) -> dict[str, object]:
+    def init_workspace(self, *, local_knowledge: bool = False) -> dict[str, object]:
         self.data_root.mkdir(parents=True, exist_ok=True)
-        created = initialize_profile_workspace(self.workspace, _TEMPLATES)
+        templates = _TEMPLATES | (_LOCAL_KNOWLEDGE_TEMPLATES if local_knowledge else {})
+        created = initialize_profile_workspace(self.workspace, templates)
         bindings = self.data_root / "resource-bindings.json"
         if not bindings.exists():
             bindings.write_text(_BINDING_STORE_TEMPLATE, encoding="utf-8")

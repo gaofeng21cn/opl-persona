@@ -12,9 +12,10 @@
 
 OPL Persona helps one person keep mail, knowledge, professional context, and
 public-facing work connected without taking ownership away from the systems
-where that information belongs. It turns evidence from OPL Relay, an Obsidian
-vault, and a lab website into explicit proposals that can be reviewed before
-anything is changed.
+where that information belongs. It turns evidence from OPL Relay, the user's
+selected knowledge sources, and a lab website into reviewable proposals.
+Obsidian and ordinary Markdown directories can remain the canonical home of
+personal knowledge.
 
 It is designed for work that continues across conversations: keeping a
 relationship-aware mail response grounded in prior evidence, turning a new
@@ -37,12 +38,15 @@ Persona is a judgment and coordination layer. It is not a replacement mail
 client, a second Obsidian vault, or a website CMS.
 
 Four callable working modes cover academic mail, technical memo, academic
-website and research writing. People and cross-source evidence memory are
-reviewable; context uses approved memory only. Management includes candidates
-by default and can show forgotten entries. Relay mail memory is read through
+website and research writing. People, memories and customized working modes
+are derived context bound to accepted source versions. Framework checks their
+sources before memory approval and every context assembly; expired, changed,
+missing or revoked sources are excluded with a diagnostic. Management includes
+candidates by default and can show forgotten entries, while invalid derived
+content is withheld until its sources are repaired. Relay mail memory is read through
 its public Package ABI, never its database. Triage, capture and note proposals
 persist across CLI runs; inspect/approve/reject bind their exact digest.
-Obsidian application needs a separate, explicitly confirmed resource grant and
+Obsidian application needs a separate, exact resource grant grounded in user authorization and
 returns a persisted authority readback. Review never authorizes send/publish.
 
 `context list/select/update`, `people list/update`, `memory list/update/review`,
@@ -55,19 +59,20 @@ modes, action forms and digest-bound row inputs.
 ## The Profile Workspace
 
 Each digital counterpart has one user-owned **Profile Workspace**. It holds
-private profile context, preferences, policies, proposal state, and
-module-maintained data. A typical workspace is:
+private source bindings, derived context, policies, proposal state, and
+module-maintained data. Personal source documents stay where the user maintains
+them; local notes are optional. A typical workspace is:
 
 ```text
 ~/OPL/profiles/<profile>/
-├── profile/            # Who this person is and durable profile references
-├── policies/           # Personal handling rules
-├── context/            # Ongoing work context
+├── profile/            # References, or explicitly selected local source notes
+├── policies/           # Optional local rules/templates; register before use
+├── context/            # Optional local project sources
 ├── templates/          # Reusable personal templates
 ├── exports/            # Explicit user-facing outputs
 └── data/
     ├── relay/          # Mail evidence, drafts, memory, and sync state
-    └── persona/        # Inbox, proposals, approvals, and receipts
+    └── persona/        # Role refs, derived context, inbox, proposals, and receipts
 ```
 
 Select the workspace with the single `OPL_PROFILE_WORKSPACE` environment
@@ -75,6 +80,13 @@ variable. Without it, Persona uses `~/OPL/profiles/<user>`. The source checkout,
 Codex Plugin cache, and any OPL Package installation contain code and contracts
 only; they are never a home for private mail, vault contents, credentials, or
 approvals.
+
+Mail policy and context are selected by knowledge IDs in
+`data/persona/knowledge-inputs.json`. Framework resolves accepted sources from
+the registry selected by `shared/memory/knowledge-bindings.json` through its
+`registry_ref` (for example, the Profile's `data/knowledge-sources.json`); local policy templates do not
+automatically become evidence. Existing documents can be registered in place.
+See [Mail policy](docs/mail-policy.md) for the role mapping and read contract.
 
 ## Start Locally
 
@@ -91,9 +103,20 @@ opl-persona --json setup init
 opl-persona --json setup status
 ```
 
-`setup init` is idempotent and creates missing templates without overwriting
-user content. Fill `profile/identity.md`, then bind the Obsidian vault by
-storing only a local reference:
+`setup init` is idempotent and creates missing control directories and handling
+policies without overwriting user content. `setup status` reports runtime
+configuration, not completeness of personal facts. It requires neither an
+external knowledge library nor a duplicate identity note.
+
+If this workspace is the chosen home for personal source notes, create the
+optional templates:
+
+```bash
+opl-persona --json setup init --local-knowledge
+```
+
+For an existing note directory, record a scoped reference. Use `obsidian` for an
+Obsidian vault or `markdown` for an ordinary directory:
 
 ```bash
 opl-persona --json binding set \
@@ -103,6 +126,17 @@ opl-persona --json binding check --id my-knowledge
 
 Persona does not read the vault during binding setup. Configure mail separately
 with OPL Relay using the same Profile Workspace.
+
+These Resource Bindings serve note adapters. Accepted knowledge identities,
+versions and read grants use the Framework's shared source mechanism; a Persona
+note binding does not grant general knowledge access. `people update`,
+`memory update` and `context update` require `source_versions`, an object mapping
+each accepted `knowledge_id` to its exact `sha256:...` revision. A new independent
+preference is first accepted in its canonical source, then referenced here.
+Existing v1 workspace records can be preserved and moved to source review with
+`opl-persona --json workspace-migrate`; previous approvals do not establish source
+currentness. The family-wide authority is the
+[OPL knowledge source and memory policy](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md).
 
 For the complete proposal contract and owner boundaries, see
 [Persona Architecture](./docs/architecture.md). Cross-repository target design
@@ -132,8 +166,9 @@ codex plugin add opl-persona@opl-persona --json
 
 After installation, start a new Codex task so it loads the installed Plugin
 snapshot. For normal work, ask Codex in natural language and let the Plugin
-route to the declared Package actions. It will produce proposals first; it
-does not silently edit mail, an Obsidian vault, or a website.
+route to the declared Package actions. It produces proposals and uses existing
+authorization when that authorization covers the exact target and change;
+missing or expanded authority requires user review.
 
 To refresh a Git marketplace snapshot, then reinstall the Plugin snapshot:
 

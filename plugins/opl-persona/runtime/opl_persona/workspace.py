@@ -16,9 +16,10 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .paths import PersonaPaths
+from .knowledge import source_dependencies, verify_knowledge_dependencies
 
 
-WORKSPACE_SCHEMA = "opl-persona-workspace.v1"
+WORKSPACE_SCHEMA = "opl-persona-workspace.v2"
 CONTEXT_MODES = {
     "academic-mail": ("Academic mail", "Relationship-aware academic correspondence"),
     "technical-memo": ("Technical memo", "Evidence-backed technical decisions"),
@@ -37,6 +38,24 @@ CONTEXT_SUMMARIES_ZH = {
     "academic-website": "面向公开展示的学术内容",
     "research-writing": "保留来源依据的科研论证与写作",
 }
+
+
+def product_context(mode: str) -> dict[str, Any]:
+    title, summary = CONTEXT_MODES[mode]
+    return {"id": mode, "title": title, "summary": summary, "mode": mode,
+            "label_i18n": copy.deepcopy(CONTEXT_LABELS[mode]),
+            "summary_i18n": {"en-US": summary, "zh-CN": CONTEXT_SUMMARIES_ZH[mode]},
+            "guidance": {"purpose": summary},
+            "source_refs": [f"opl-package://opl-persona/context/{mode}"],
+            "knowledge_origin": "product", "source_versions": {}}
+
+
+def is_product_context(item: dict[str, Any]) -> bool:
+    if item.get("id") not in CONTEXT_MODES:
+        return False
+    canonical = product_context(item["id"])
+    metadata = {"created_at", "updated_at", "migration_review_required"}
+    return set(item) <= set(canonical) | metadata and all(item.get(key) == value for key, value in canonical.items())
 
 
 def now() -> str:
@@ -121,6 +140,23 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
             os.unlink(temporary)
 
 
+def current_relay_memory(item: object) -> bool:
+    if not isinstance(item, dict) or item.get("status") != "approved":
+        return False
+    source_refs = item.get("source_refs")
+    if (not isinstance(source_refs, list) or not source_refs
+            or not all(isinstance(source, str) and source for source in source_refs)):
+        return False
+    currentness = item.get("source_currentness")
+    if (not isinstance(currentness, dict) or currentness.get("status") != "current"
+            or currentness.get("reasons") != [] or not isinstance(currentness.get("checked_at"), str)):
+        return False
+    try:
+        return datetime.fromisoformat(currentness["checked_at"].replace("Z", "+00:00")).tzinfo is not None
+    except ValueError:
+        return False
+
+
 def relay_read(ref: str, value: dict[str, Any], paths: PersonaPaths) -> dict[str, Any]:
     """Use only Relay's package-scoped public read ABI, never a private store."""
     if ref not in {"personal.memory.v1#people", "personal.memory.v1#search"}:
@@ -153,7 +189,31 @@ def relay_read(ref: str, value: dict[str, Any], paths: PersonaPaths) -> dict[str
         data = payload.get("data")
         if not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise ValueError("Relay memory read must contain data.items")
-        return {"state": "ready", "items": copy.deepcopy(data["items"]), "package_id": "opl-relay", "ref": ref}
+        policy = data.get("source_policy")
+        if (not isinstance(policy, dict) or policy.get("source_currentness_checked") is not True
+                or policy.get("only_approved_memory_included") is not True):
+            raise ValueError("Relay memory read must verify approved source currentness")
+        items = []
+        for raw in data["items"]:
+            if not isinstance(raw, dict):
+                continue
+            item = copy.deepcopy(raw)
+            if ref.endswith("#search"):
+                if not current_relay_memory(item):
+                    continue
+            else:
+                memories = item.get("approved_memories")
+                if not isinstance(memories, list):
+                    continue
+                # Identity can remain discoverable, but its summary must come from a current source.
+                item["approved_memories"] = [memory for memory in memories if current_relay_memory(memory)]
+                item["summary"] = next((memory.get("summary", "") for memory in item["approved_memories"]), "")
+                item["source_refs"] = list(dict.fromkeys(
+                    source for memory in item["approved_memories"] for source in memory.get("source_refs", [])
+                    if isinstance(source, str) and source))
+            items.append(item)
+        return {"state": "ready", "items": items, "source_policy": copy.deepcopy(policy),
+                "package_id": "opl-relay", "ref": ref}
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return {"state": "unavailable", "items": [], "package_id": "opl-relay", "ref": ref,
                 "reason": "Relay public memory ABI unavailable"}
@@ -166,17 +226,12 @@ class WorkspaceStore:
 
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
-            contexts = [{"id": mode, "title": title, "summary": summary, "mode": mode,
-                         "label_i18n": copy.deepcopy(CONTEXT_LABELS[mode]),
-                         "summary_i18n": {"en-US": summary, "zh-CN": CONTEXT_SUMMARIES_ZH[mode]},
-                         "guidance": {"purpose": summary},
-                         "source_refs": [f"opl-package://opl-persona/context/{mode}"]}
-                        for mode, (title, summary) in CONTEXT_MODES.items()]
+            contexts = [product_context(mode) for mode in CONTEXT_MODES]
             return {"schema_version": WORKSPACE_SCHEMA, "active_context_id": "academic-mail",
                     "contexts": contexts, "people": [], "memories": []}
         state = json.loads(self.path.read_text(encoding="utf-8"))
         if not isinstance(state, dict) or state.get("schema_version") != WORKSPACE_SCHEMA:
-            raise ValueError("invalid Persona workspace schema")
+            raise ValueError("invalid Persona workspace schema; use workspace-migrate for an existing v1 workspace")
         for collection in ("contexts", "people", "memories"):
             if not isinstance(state.get(collection), list) or not all(isinstance(item, dict) for item in state[collection]):
                 raise ValueError(f"invalid workspace {collection}")
@@ -194,8 +249,67 @@ class WorkspaceStore:
             raise ValueError("unsupported workspace collection")
         with workspace_lock(self.paths):
             items = self._load()[collection]
-        return [copy.deepcopy(item) | {"digest": item_digest(item)} for item in items
+        return [self._projection(item) for item in items
                 if status is None or item.get("status") == status]
+
+    def _source_check(self, item: dict[str, Any]) -> dict[str, Any]:
+        if is_product_context(item):
+            return {"valid": True, "issues": []}
+        return verify_knowledge_dependencies(item.get("source_versions"), self.paths)
+
+    def _projection(self, item: dict[str, Any]) -> dict[str, Any]:
+        result = copy.deepcopy(item) | {"digest": item_digest(item)}
+        result["source_verification"] = self._source_check(item)
+        if not result["source_verification"]["valid"]:
+            # Keep identities and provenance for repair; stale private content is
+            # not returned by the management ABI as another readable truth.
+            for key in ("title", "summary", "display_name", "guidance", "aliases", "label_i18n", "summary_i18n"):
+                if key in result:
+                    result[key] = {} if isinstance(result[key], dict) else [] if isinstance(result[key], list) else ""
+            fields = {"id", "mode", "title", "summary", "display_name", "guidance", "aliases",
+                      "label_i18n", "summary_i18n", "memory_kind", "person_ids", "context_ids",
+                      "source_refs", "source_versions", "knowledge_origin", "status", "review",
+                      "created_at", "updated_at", "migration_review_required", "digest", "source_verification"}
+            result = {key: value for key, value in result.items() if key in fields}
+        return result
+
+    def migrate_workspace(self) -> dict[str, Any]:
+        """One-time lossless migration; old approvals cannot prove source currency."""
+        with workspace_lock(self.paths):
+            if not self.path.exists():
+                return {"migrated": False, "schema_version": WORKSPACE_SCHEMA, "reason": "workspace_absent"}
+            original = self.path.read_bytes()
+            state = json.loads(original)
+            if isinstance(state, dict) and state.get("schema_version") == WORKSPACE_SCHEMA:
+                return {"migrated": False, "schema_version": WORKSPACE_SCHEMA, "reason": "already_current"}
+            if not isinstance(state, dict) or state.get("schema_version") != "opl-persona-workspace.v1":
+                raise ValueError("unsupported Persona workspace migration source")
+            if any(not isinstance(state.get(key), list) or not all(isinstance(item, dict) for item in state[key])
+                   for key in ("contexts", "people", "memories")):
+                raise ValueError("invalid Persona migration collections")
+            backup = self.paths.data_root / "migration-backups" / (hashlib.sha256(original).hexdigest() + ".json")
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            if backup.exists() and backup.read_bytes() != original:
+                raise ValueError("migration backup identity conflict")
+            if not backup.exists():
+                with backup.open("xb") as handle:
+                    os.chmod(backup, 0o600)
+                    handle.write(original)
+            for collection in ("contexts", "people", "memories"):
+                for item in state[collection]:
+                    item["knowledge_origin"] = "derived"
+                    item["source_versions"] = {}
+                    item["migration_review_required"] = True
+                    if collection == "contexts" and is_product_context(item | {"knowledge_origin": "product"}):
+                        item["knowledge_origin"] = "product"
+                        item["migration_review_required"] = False
+                    if collection == "memories":
+                        item["status"] = "forgotten" if item.get("status") == "forgotten" else "candidate"
+                        item["review"] = None
+            state["schema_version"] = WORKSPACE_SCHEMA
+            atomic_json(self.path, state)
+            return {"migrated": True, "schema_version": WORKSPACE_SCHEMA, "backup_ref": str(backup),
+                    "source_review_required": True, "preserved_records": sum(len(state[key]) for key in ("contexts", "people", "memories"))}
 
     def _update(self, collection: str, item: dict[str, Any], expected_digest: str) -> dict[str, Any]:
         with workspace_lock(self.paths):
@@ -212,15 +326,16 @@ class WorkspaceStore:
             item["updated_at"] = now()
             state[collection] = [old for old in state[collection] if old["id"] != item["id"]] + [item]
             atomic_json(self.path, state)
-            return copy.deepcopy(item) | {"digest": item_digest(item)}
+            return self._projection(item)
 
     def update_context(self, *, context_id: str, title: str, summary: str, guidance: dict[str, Any],
-                       source_refs: list[str], expected_digest: str,
+                       source_refs: list[str], source_versions: dict[str, str], expected_digest: str,
                        label_i18n: dict[str, str] | None = None) -> dict[str, Any]:
         if context_id not in CONTEXT_MODES:
             raise ValueError("context_id must identify a supported working mode")
         if not isinstance(guidance, dict):
             raise ValueError("guidance must be an object")
+        source_dependencies(source_versions)
         labels = label_i18n if label_i18n is not None else {"en-US": title, "zh-CN": title}
         if not isinstance(labels, dict) or not labels or not all(
             isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip() and len(value) <= 512
@@ -231,7 +346,8 @@ class WorkspaceStore:
                             "summary": text(summary, "summary"), "guidance": copy.deepcopy(guidance),
                             "label_i18n": copy.deepcopy(labels),
                             "summary_i18n": {"en-US": summary.strip()},
-                            "source_refs": refs(source_refs)}, expected_digest)
+                            "source_refs": refs(source_refs), "source_versions": copy.deepcopy(source_versions),
+                            "knowledge_origin": "derived"}, expected_digest)
 
     def select_context(self, context_id: str) -> dict[str, Any]:
         with workspace_lock(self.paths):
@@ -243,20 +359,24 @@ class WorkspaceStore:
         return self.context(context_id)
 
     def update_person(self, *, person_id: str, display_name: str, summary: str, aliases: list[str],
-                      source_refs: list[str], expected_digest: str) -> dict[str, Any]:
+                      source_refs: list[str], source_versions: dict[str, str], expected_digest: str) -> dict[str, Any]:
+        source_dependencies(source_versions)
         return self._update("people", {"id": text(person_id, "person_id", 256),
                             "title": text(display_name, "display_name", 512), "display_name": display_name.strip(),
                             "summary": text(summary, "summary"), "aliases": refs(aliases, "aliases", required=False),
-                            "source_refs": refs(source_refs)}, expected_digest)
+                            "source_refs": refs(source_refs), "source_versions": copy.deepcopy(source_versions),
+                            "knowledge_origin": "derived"}, expected_digest)
 
     def update_memory(self, *, memory_id: str, title: str, summary: str, memory_kind: str,
                       person_ids: list[str], context_ids: list[str], source_refs: list[str],
-                      expected_digest: str) -> dict[str, Any]:
+                      source_versions: dict[str, str], expected_digest: str) -> dict[str, Any]:
+        source_dependencies(source_versions)
         return self._update("memories", {"id": text(memory_id, "memory_id", 256), "title": text(title, "title", 512),
                             "summary": text(summary, "summary"), "memory_kind": text(memory_kind, "memory_kind", 128),
                             "person_ids": refs(person_ids, "person_ids", required=False),
                             "context_ids": refs(context_ids, "context_ids", required=False),
-                            "source_refs": refs(source_refs), "status": "candidate", "review": None}, expected_digest)
+                            "source_refs": refs(source_refs), "source_versions": copy.deepcopy(source_versions),
+                            "knowledge_origin": "derived", "status": "candidate", "review": None}, expected_digest)
 
     def review_memory(self, *, memory_id: str, status: str, approval_ref: str,
                       expected_digest: str) -> dict[str, Any]:
@@ -272,11 +392,15 @@ class WorkspaceStore:
                 raise ValueError("unknown memory_id")
             if item_digest(item) != expected_digest:
                 raise ValueError("expected_digest does not match current memory")
+            if status == "approved":
+                verification = self._source_check(item)
+                if not verification["valid"]:
+                    raise ValueError("memory sources require review: " + "; ".join(verification["issues"]))
             item["status"] = status
             item["review"] = {"approval_ref": approval_ref, "expected_digest": expected_digest, "reviewed_at": now()}
             item["updated_at"] = now()
             atomic_json(self.path, state)
-            return copy.deepcopy(item) | {"digest": item_digest(item)}
+            return self._projection(item)
 
     def context(self, context_id: str | None = None, person_id: str | None = None) -> dict[str, Any]:
         with workspace_lock(self.paths):
@@ -285,14 +409,25 @@ class WorkspaceStore:
         mode = next((item for item in state["contexts"] if item["id"] == selected), None)
         if mode is None:
             raise ValueError("unknown context_id")
-        memories = [copy.deepcopy(item) for item in state["memories"] if item["status"] == "approved"
+        candidates = [copy.deepcopy(item) for item in state["memories"] if item["status"] == "approved"
                     and (not item["context_ids"] or selected in item["context_ids"])
                     and (person_id is None or person_id in item["person_ids"])]
+        excluded: list[dict[str, Any]] = []
+        def current(item: dict[str, Any]) -> bool:
+            verification = self._source_check(item)
+            if not verification["valid"]:
+                excluded.append({"id": item["id"], "issues": verification["issues"]})
+            return verification["valid"]
+        memories = [item for item in candidates if current(item)]
         selected_people = {identifier for item in memories for identifier in item["person_ids"]}
-        people = [copy.deepcopy(item) for item in state["people"] if item["id"] in selected_people]
-        return {"context": copy.deepcopy(mode), "people": people, "memories": memories,
-                "source_refs": list(dict.fromkeys(mode["source_refs"] + [ref for item in memories for ref in item["source_refs"]])),
-                "memory_policy": "approved_only", "source_content_is_untrusted_data": True, "external_write_allowed": False}
+        people = [copy.deepcopy(item) for item in state["people"] if item["id"] in selected_people and current(item)]
+        mode_current = current(mode)
+        context = copy.deepcopy(mode) if mode_current else {"id": selected, "mode": selected,
+                  "summary": "", "guidance": {}, "source_refs": [], "source_state": "review_required"}
+        return {"context": context, "people": people, "memories": memories,
+                "source_refs": list(dict.fromkeys(context["source_refs"] + [ref for item in memories + people for ref in item["source_refs"]])),
+                "excluded_knowledge": excluded, "memory_policy": "approved_and_current_sources_only",
+                "source_content_is_untrusted_data": True, "external_write_allowed": False}
 
     def relay(self, collection: str, *, query: str = "", entity: str = "", status: str = "approved") -> dict[str, Any]:
         if collection not in {"people", "search"}:

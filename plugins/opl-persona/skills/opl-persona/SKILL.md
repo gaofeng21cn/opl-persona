@@ -1,12 +1,14 @@
 ---
 name: opl-persona
-description: Use OPL Persona to coordinate evidence-backed PI context across OPL Relay, Obsidian, and the lab website through reviewable proposals.
+description: Use OPL Persona to coordinate evidence-backed PI context across OPL Relay, user-selected knowledge sources, and the lab website through reviewable proposals.
 ---
 
 # OPL Persona
 
-Persona is the cross-domain judgment layer. It does not replace the source
-authority of mail, Obsidian, or `gflab_web`.
+Persona is the cross-domain judgment layer. Source authority remains with mail,
+the user's selected knowledge sources, and `gflab_web`. Follow the
+[Framework knowledge source and memory policy](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md);
+Persona consumes shared source validation and maintains derived context.
 
 ## Runtime boundary
 
@@ -31,8 +33,13 @@ opl-persona --json setup status
 opl-persona --json setup init
 ```
 
-`setup init` is idempotent and only creates missing profile templates. Ask the
-user to fill `profile/identity.md`, then configure the knowledge binding with:
+`setup init` is idempotent and creates control directories and handling policies.
+Readiness covers runtime configuration, not personal facts. Preserve existing
+personal sources; do not ask the user to duplicate them in `profile/identity.md`.
+When the user has selected the workspace as the canonical home for personal
+notes, `setup init --local-knowledge` creates missing local templates.
+
+Configure an existing note directory only when that resource is needed:
 
 ```bash
 opl-persona --json binding set \
@@ -41,11 +48,14 @@ opl-persona --json binding check --id my-knowledge
 ```
 
 The binding command stores only a local `file:` reference and scopes. It does
-not read the vault or copy its content. For mail, hand the same selected
+not read the vault or copy its content. Use `--provider markdown` for a normal
+Markdown directory. These note-adapter bindings do not grant general knowledge
+access; accepted sources and grants are managed by Framework. For mail, hand the same selected
 `OPL_PROFILE_WORKSPACE` to OPL Relay and let Relay initialize the account
 configuration and Keychain credential; Persona must not write Relay state.
-Finish first-run work by running `setup status` again and report each step,
-including any delegated Relay step, before drafting.
+Finish first-run work by running `setup status` again. Verify facts required by
+the actual task from the chosen sources; an optional unconfigured resource
+does not block independent work.
 
 Prefer the installed OPL Package contribution command when OPL App exposes it.
 If the Package is not discovered yet, the plugin's own `bin/opl-persona`
@@ -62,9 +72,12 @@ launcher is a self-contained fallback for the same JSON ABI.
    - `opl app contribution execute --package-id opl-persona --ref knowledge.obsidian.v1#note.propose --input <json>`
 
 3. Inspect every returned proposal bundle and its provenance.
-4. Ask the user to approve the exact external target and payload.
+4. Check whether the user's existing authorization covers the exact external
+   target and payload. Reuse and record that authority when it does; ask only
+   when required authority is missing or the scope changes.
 5. Use `personal.context.v1#proposal.inspect`, then approve/reject with
-   `proposal_id`, `approval_ref`, and the inspected `expected_digest`.
+   `proposal_id`, `approval_ref`, and the inspected `expected_digest`. The review
+   reference must identify actual authorization or an authorized maintenance review.
    Review persists locally and never grants external write permission.
 6. Domain adapters execute separately. Persona's Obsidian action requires the
    independent resource grant below. Mail send and website publish remain
@@ -78,11 +91,19 @@ Read `personal.context.v1#contexts`, `personal.memory.v1#people`, and
 `personal.memory.v1#memories` through Persona. Modes are academic mail,
 technical memo, academic website and research writing: drafting context, never
 permissions. Select/update contexts and edit people/memory using the returned
-`data.command_inputs` forms, preserving current digests and non-empty source
-refs. New people/memory use `expected_digest=absent`. Memory edits become
+`data.command_inputs` forms, preserving current digests, non-empty source refs,
+and `source_versions` mapping each accepted `knowledge_id` to its exact SHA-256
+revision. New people/memory use `expected_digest=absent`. Memory edits become
 candidates; `memory.review` binds memory identity/digest and user review ref.
 Management defaults to candidate/approved; `status=all` includes forgotten.
-Context uses approved memory only, including Relay's approved public evidence.
+Memory approval and each context assembly invoke Framework source validation.
+Missing, expired, changed or revoked sources exclude the derived item and
+return `excluded_knowledge`; unavailable validation is also an exclusion.
+Management may show repair metadata while hiding invalid derived content.
+Use current accepted source versions to repair an item, not a guessed hash.
+An independent new preference belongs first in the selected canonical source,
+then in Persona as a derived reference. `workspace-migrate` backs up v1 data and
+moves non-product records to source review; old approvals do not bypass it.
 
 Relay memory is obtained only with `opl app contribution read --package-id
 opl-relay` at `personal.memory.v1#people` or `#search`. Never read or copy its
@@ -94,11 +115,22 @@ persist to the selected Profile; local Inbox staging is not an external write.
 ## Mail triage and inbox capture
 
 Mail triage is judgment over stable Relay evidence, not a mailbox action. Read
-the full selected message and relevant history through Relay, then read the
-private Markdown rules under `<profile>/policies/` and the relevant profile and
-project context. Judge the message's actual request and relationship context;
-do not classify it by the presence of words such as `newsletter` or
-`manuscript` alone.
+the full selected message and relevant history through Relay. Persona selects
+private Markdown rules and personal context via knowledge IDs in
+`<profile>/data/persona/knowledge-inputs.json`: `mail_policy` is required;
+`identity`, `team`, and `projects` are optional role lists. Framework resolves
+and validates each accepted source before use. Keep the original documents in
+the user's chosen Obsidian or ordinary directory; configure references only.
+See the [mail policy contract](https://github.com/gaofeng21cn/opl-persona/blob/main/docs/mail-policy.md)
+for the exact role schema and Markdown facts format.
+
+Existing local policy/profile files are usable after Framework registration
+and acceptance in place. Setup templates or directory presence do not supply
+accepted evidence. A missing policy selection or an invalid selected source
+stops triage. Missing optional identity or project facts remain uncertain;
+report the task-specific gap without creating another personal note.
+Judge the message's actual request and relationship context; do not classify
+it by the presence of words such as `newsletter` or `manuscript` alone.
 
 Submit one valid `opl-relay-mail-triage-evidence.v2` facts-only bridge as
 `relay_evidence`, plus an `assessment` object with `email_ref` matching its
@@ -109,12 +141,13 @@ source reference, `classification`, `priority`, `rationale`, `uncertainty`, and
 `low`. Supply a concrete reason and state unresolved context explicitly.
 Persona validates this judgment and records the current policy snapshot; it
 does not invent a classification from keywords. The final `policy_digest` is
-the SHA-256 content digest of the local Markdown snapshot.
+the SHA-256 digest of the selected roles, knowledge IDs, exact source revisions,
+and Markdown content.
 Relay's refs-set digest is preserved only as provenance and is never reused as
 the content digest. Recipient evidence includes To/Cc/Bcc; Persona returns a
 reviewable route suggestion after loading identity and manuscript/roster facts
-from `<profile>/profile/*.md` and `<profile>/context/*.md`, without executing
-it. The result contains both a
+from the selected accepted knowledge sources, without executing it. The result
+contains both a
 `personal.inbox.v1` capture proposal and a `mail.triage` proposal. It does not
 archive, mark, draft, send, or otherwise change mail. See the canonical
 [Persona Mail Policy Boundary](https://github.com/gaofeng21cn/opl-persona/blob/main/docs/mail-policy.md).
@@ -126,7 +159,7 @@ archive, mark, draft, send, or otherwise change mail. See the canonical
 frontmatter, body, links, tags, evidence refs, and `expected_digest` (`absent`
 for create or a SHA-256 digest for update). The result explicitly permits only
 a reviewable proposal and forbids direct vault, filesystem, mail, and website
-writes. The owner adapter must re-check the digest after user approval.
+writes. The owner adapter must re-check the digest after the authorized review.
 
 For apply, first approve the persisted proposal. Read available bindings from
 `personal.context.v1#proposals`, then call `knowledge.obsidian.v1#note.authorize`
@@ -136,7 +169,9 @@ writing the note. Call `knowledge.obsidian.v1#note.apply` with the same
 identity/digest/binding and external_approval_ref. Automation may instead pass
 an external_approval object binding the proposal, resource, provider,
 capability and notes.write scope; exactly one approval input is required.
-Never infer/default external authorization. Inspect the persisted authority
+Record existing user authorization when it covers the exact change; do not
+turn `confirmation=confirmed` into an automatic default or a repeated permission
+question. Inspect the persisted authority
 receipt before reporting success. Interrupted/failed writes require owner
 reconciliation, not a blind retry. These actions do not grant send/publish.
 

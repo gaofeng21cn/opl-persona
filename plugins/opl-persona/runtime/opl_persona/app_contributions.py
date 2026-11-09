@@ -177,6 +177,7 @@ ACTION_CONTRACTS.update({
             "guidance": {"type": "object", "required": True},
             "label_i18n": {"type": "object", "required": False},
             "source_refs": {"type": "string_list", "required": True},
+            "source_versions": {"type": "object", "required": True},
             "expected_digest": {"type": "string", "required": True},
         },
         "result": "personal.context.v1#context.update.result",
@@ -189,6 +190,7 @@ ACTION_CONTRACTS.update({
             "summary": {"type": "string", "required": True},
             "aliases": {"type": "string_list", "required": True},
             "source_refs": {"type": "string_list", "required": True},
+            "source_versions": {"type": "object", "required": True},
             "expected_digest": {"type": "string", "required": True},
         },
         "result": "personal.memory.v1#person.update.result",
@@ -203,6 +205,7 @@ ACTION_CONTRACTS.update({
             "person_ids": {"type": "string_list", "required": True},
             "context_ids": {"type": "string_list", "required": True},
             "source_refs": {"type": "string_list", "required": True},
+            "source_versions": {"type": "object", "required": True},
             "expected_digest": {"type": "string", "required": True},
         },
         "result": "personal.memory.v1#memory.update.result",
@@ -430,9 +433,14 @@ def _relay_projection(evidence: dict[str, Any], collection: str) -> list[dict[st
             continue
         if collection == "memories" and raw.get("status") not in {"approved", "candidate", "forgotten"}:
             continue
-        projected.append({"id": f"relay:{identifier}", "title": title, "summary": summary if isinstance(summary, str) else "",
+        item = {"id": f"relay:{identifier}", "title": title, "summary": summary if isinstance(summary, str) else "",
                           "status": raw.get("status", "approved"), "source_refs": source_refs,
-                          "owner_package_id": "opl-relay", "owner_ref": evidence["ref"], "actions": []})
+                          "owner_package_id": "opl-relay", "owner_ref": evidence["ref"], "actions": []}
+        if collection == "memories":
+            item["source_currentness"] = raw.get("source_currentness")
+        else:
+            item["approved_memories"] = raw.get("approved_memories", [])
+        projected.append(item)
     return projected
 
 
@@ -456,7 +464,8 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
         for item in store.list("contexts"):
             fields = {"context_id": item["id"], "title": item["title"], "summary": item["summary"],
                       "guidance": item["guidance"], "label_i18n": item.get("label_i18n", {}),
-                      "source_refs": item["source_refs"], "expected_digest": item["digest"]}
+                      "source_refs": item["source_refs"], "source_versions": item["source_versions"],
+                      "expected_digest": item["digest"]}
             items.append(item | {"actions": [_row_action("personal.context.v1#context.select", {"context_id": item["id"]}),
                                                _row_action("personal.context.v1#context.update", fields)]})
         data["active_context"] = store.context(value.get("context_id"), value.get("person_id"))
@@ -471,7 +480,8 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
         memories = store.list("memories", status="approved")
         for item in store.list("people"):
             fields = {"person_id": item["id"], "display_name": item["display_name"], "summary": item["summary"],
-                      "aliases": item["aliases"], "source_refs": item["source_refs"], "expected_digest": item["digest"]}
+                      "aliases": item["aliases"], "source_refs": item["source_refs"],
+                      "source_versions": item["source_versions"], "expected_digest": item["digest"]}
             items.append(item | {"owner_package_id": "opl-persona", "memories": [memory for memory in memories if item["id"] in memory["person_ids"]],
                                  "actions": [_row_action("personal.memory.v1#person.update", fields)]})
         relay = store.relay("people")
@@ -480,7 +490,7 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
     else:
         items = []
         for item in store.list("memories"):
-            fields = {key: item[key] for key in ("title", "summary", "memory_kind", "person_ids", "context_ids", "source_refs")}
+            fields = {key: item[key] for key in ("title", "summary", "memory_kind", "person_ids", "context_ids", "source_refs", "source_versions")}
             fields.update(memory_id=item["id"], expected_digest=item["digest"])
             actions = [_row_action("personal.memory.v1#memory.update", fields)]
             actions += [_row_action("personal.memory.v1#memory.review", {"memory_id": item["id"], "status": decision,
@@ -490,7 +500,7 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
         relay = store.relay("search")
         items += _relay_projection(relay, "memories")
         data["relay"] = {key: item for key, item in relay.items() if key != "items"}
-        data["memory_policy"] = "approved_only_for_context"
+        data["memory_policy"] = "approved_and_current_sources_only"
     if ref != "personal.context.v1#proposals":
         data.update(_collection_data(ref, items, value))
     return {"kind": "data", "state": "ready", "result_schema": contract["result"], "input_schema": contract["input"], "data": data}

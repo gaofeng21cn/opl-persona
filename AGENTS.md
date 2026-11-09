@@ -3,15 +3,21 @@
 本仓持有跨领域 PI 上下文、证据 provenance、review-gated proposal 合同、
 Codex Plugin 与 OPL Package 描述。
 
-- 邮件、Obsidian 和 `gflab_web` 各自保留自己的数据 authority；Persona 不复制
-  邮件库、私有记忆、vault 或网站 checkout。
+- 邮件、用户选定的知识来源和 `gflab_web` 各自保留自己的数据 authority。Obsidian 与
+  普通 Markdown 目录均可为知识主源；Persona 只保存有来源版本依赖的派生上下文，
+  不复制邮件库、个人知识正文、vault 或网站 checkout。
 - `OPL_PROFILE_WORKSPACE` 是用户拥有的唯一 Profile Workspace；未注入时使用
   `~/OPL/profiles/<user>`。Persona 的机器维护状态只位于其 `data/persona`
   子目录；仓库、插件缓存和 Package 安装目录不是数据 authority。
 - Obsidian vault 只能由 Profile Workspace 的 Resource Binding 解析后传入；不得在
   Persona 中硬编码 vault 路径或通过环境变量旁路 Binding。
+- 知识归属与生命周期遵循 Framework 的
+  [knowledge-source-and-memory-policy](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md)。
+  人物、记忆及自定义上下文必填 `source_versions`，由 Framework 验证当前来源；
+  来源过期、变动、缺失或撤权时不继续提供旧摘要。笔记 Resource Binding 不替代通用知识授权。
 - 所有跨系统写入必须先成为带 `source_refs` 的 `opl-persona-proposal.v1`，
-  默认 `approval.external_write_allowed=false`，由对应 adapter 在用户确认后执行。
+  默认 `approval.external_write_allowed=false`，由对应 adapter 在精确授权范围内执行。
+  已有用户授权覆盖目标与改动时沿用并记录，不机械重复确认；范围扩大时重新确认。
 - 运行 `python3 -m pytest` 与官方 `validate_plugin.py`；私有数据、凭据和真实外部
   mutation 不进入测试或 Git。
 

@@ -9,6 +9,7 @@ from typing import Any
 from .approvals import APPROVAL_SCHEMA_VERSION, approve_proposal, proposal_digest
 from .bindings import binding_file_root, list_resource_bindings, load_resource_binding
 from .inbox import InboxStore
+from .knowledge import verify_knowledge_dependencies
 from .obsidian_apply import (
     _digest_bytes,
     _proposal_identity,
@@ -53,11 +54,27 @@ class ProposalStore:
 
     def list(self) -> list[dict[str, Any]]:
         with workspace_lock(self.paths):
-            return copy.deepcopy(self._load()["items"])
+            items = self._load()["items"]
+        return [self._projection(item) for item in items]
 
     def inspect(self, proposal_id: str) -> dict[str, Any]:
         with workspace_lock(self.paths):
-            return copy.deepcopy(self._item(self._load(), proposal_id))
+            item = self._item(self._load(), proposal_id)
+        return self._projection(item)
+
+    def _source_verification(self, item: dict[str, Any]) -> dict[str, Any] | None:
+        proposal = item["proposal"]
+        versions = proposal["payload"].get("source_versions")
+        if versions is None and proposal.get("proposal_kind") != "mail.triage":
+            return None
+        return verify_knowledge_dependencies(versions, self.paths)
+
+    def _projection(self, item: dict[str, Any]) -> dict[str, Any]:
+        result = copy.deepcopy(item)
+        verification = self._source_verification(item)
+        if verification is not None:
+            result["source_verification"] = verification
+        return result
 
     def preview(self, item: dict[str, Any]) -> dict[str, Any]:
         """Project review content without persisting source text or granting writes."""
@@ -177,6 +194,10 @@ class ProposalStore:
         with workspace_lock(self.paths):
             state = self._load()
             item = self._item(state, proposal_id, expected_digest)
+            if decision == "approved":
+                verification = self._source_verification(item)
+                if verification is not None and not verification["valid"]:
+                    raise ValueError("proposal sources require review: " + "; ".join(verification["issues"]))
             if item["status"] != "pending":
                 if item["status"] == decision and item["approval"].get("approval_ref") == approval_ref:
                     return copy.deepcopy(item)

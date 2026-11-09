@@ -54,11 +54,16 @@ digest，不预填 approval_ref 或 external 确认。默认 Context 的 label_i
 proposals 每项包含 id/title/summary/status/source_refs/proposal_digest、完整 proposal、
 approval 及必要 receipt。approve/reject 必填 proposal_id、approval_ref、expected_digest。
 Memory 管理默认显示 candidate/approved，status=all 可审阅 forgotten；Context 只组装
-approved，编辑记忆须重新审核。
+approved 且来源仍有效的派生记录，编辑记忆须重新审核。人物、记忆与自定义 Context 表单
+保留 `source_versions`（知识 ID 到精确 SHA-256 的映射），不能由 renderer 自动填充猜测版本。
+Framework 判定来源无效时，管理视图保留修复身份但隐藏旧摘要内容；消费方显示
+`excluded_knowledge` 的局部缺口，不从旧表单输入恢复被隐藏的内容。
 
 Obsidian read model 提供当前 notes.write binding；只有一个时可预填 binding_id，不默认
 授权。用户先批准提案，再通过 note.authorize 对精确 proposal/digest/binding 提交独立
-approval_ref 和 confirmation=confirmed。owner 持久化 scope-bound approval，note.apply
+approval_ref 和 confirmation=confirmed。已有授权覆盖当前精确目标与改动时，受托维护者可记录
+该依据完成授权步骤，无需再次向用户提相同问题；缺失或扩大授权范围时才请求确认。
+owner 持久化 scope-bound approval，note.apply
 随后引用 external_approval_ref，无需手填授权对象。自动化可改用独立 external_approval
 对象，两种输入必须且只能选一种。资源重绑定、digest 或文件前提失效均拒绝执行；成功后
 显示真实 readback receipt。普通 proposal approval 不允许 send/publish，也不会自动 apply。
