@@ -290,6 +290,10 @@ def load_markdown_policies(
     )
 
 
+def selected_mail_policy_ids(paths: PersonaPaths) -> tuple[str, ...]:
+    return _knowledge_roles(paths)["mail_policy"]
+
+
 class MarkdownPolicyLoader:
     """Convenience owner-bound loader for callers that reuse one workspace."""
 

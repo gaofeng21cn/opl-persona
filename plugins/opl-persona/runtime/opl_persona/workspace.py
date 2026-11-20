@@ -402,16 +402,24 @@ class WorkspaceStore:
             atomic_json(self.path, state)
             return self._projection(item)
 
-    def context(self, context_id: str | None = None, person_id: str | None = None) -> dict[str, Any]:
+    def context(self, context_id: str | None = None, person_id: str | None = None, *,
+                drafting: bool = False) -> dict[str, Any]:
         with workspace_lock(self.paths):
             state = self._load()
         selected = context_id or state["active_context_id"]
         mode = next((item for item in state["contexts"] if item["id"] == selected), None)
         if mode is None:
             raise ValueError("unknown context_id")
+        def matches_person(item: dict[str, Any]) -> bool:
+            if drafting and not item["person_ids"]:
+                return True
+            if person_id is None:
+                return not drafting
+            return person_id in item["person_ids"]
+
         candidates = [copy.deepcopy(item) for item in state["memories"] if item["status"] == "approved"
                     and (not item["context_ids"] or selected in item["context_ids"])
-                    and (person_id is None or person_id in item["person_ids"])]
+                    and matches_person(item)]
         excluded: list[dict[str, Any]] = []
         def current(item: dict[str, Any]) -> bool:
             verification = self._source_check(item)

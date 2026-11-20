@@ -7,11 +7,13 @@ from uuid import uuid4
 
 from .core import (
     build_inbox_capture_proposals,
+    build_mail_feedback_proposal,
     build_mail_triage_proposals,
     build_obsidian_note_proposals,
 )
 from .inbox import InboxStore
 from .paths import PersonaPaths
+from .policy import load_markdown_policies
 from .proposals import ProposalStore
 from .workspace import CONTEXT_MODES, WorkspaceStore
 from .bindings import list_resource_bindings
@@ -38,6 +40,7 @@ DATA_CONTRACTS: dict[str, dict[str, Any]] = {
         "input": {
             "context_id": {"type": "string", "required": False, "enum": list(CONTEXT_MODES)},
             "person_id": {"type": "string", "required": False},
+            "purpose": {"type": "string", "required": False, "enum": ["mail-drafting"]},
         },
         "result": "personal.context.v1#contexts.result",
     },
@@ -101,6 +104,19 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
             "assessment": {"type": "object", "required": True},
         },
         "result": "communications.mail.v1#triage.propose.result",
+    },
+    "communications.mail.v1#draft.feedback.propose": {
+        "operation": "execute",
+        "confirmation_required": False,
+        "input": {
+            "disposition": {"type": "string", "required": True, "enum": ["this-draft", "reuse"]},
+            "draft_ref": {"type": "string", "required": True},
+            "draft_fingerprint": {"type": "string", "required": True},
+            "final_ref": {"type": "string", "required": True},
+            "final_fingerprint": {"type": "string", "required": True},
+            "note": {"type": "object", "required": False},
+        },
+        "result": "communications.mail.v1#draft.feedback.propose.result",
     },
     "personal.inbox.v1#capture.propose": {
         "operation": "execute",
@@ -304,7 +320,7 @@ VIEW_ACTIONS = {
     "personal.memory.v1#memories": ["personal.memory.v1#memory.update", "personal.memory.v1#memory.review"],
     "personal.context.v1#proposals": [
         "personal.context.v1#proposal.inspect", "personal.context.v1#proposal.approve", "personal.context.v1#proposal.reject",
-        "communications.mail.v1#triage.propose", "personal.inbox.v1#capture.propose",
+        "communications.mail.v1#triage.propose", "communications.mail.v1#draft.feedback.propose", "personal.inbox.v1#capture.propose",
         "knowledge.obsidian.v1#note.propose", "knowledge.obsidian.v1#note.authorize", "knowledge.obsidian.v1#note.apply",
     ],
 }
@@ -332,6 +348,7 @@ COLLECTION_ACTIONS = {
     ],
     "personal.context.v1#proposals": [
         ("communications.mail.v1#triage.propose", {"zh-CN": "邮件分流提案", "en-US": "Mail triage proposal"}),
+        ("communications.mail.v1#draft.feedback.propose", {"zh-CN": "提出沟通偏好修订", "en-US": "Propose a communication preference"}),
         ("personal.inbox.v1#capture.propose", {"zh-CN": "收集项提案", "en-US": "Capture proposal"}),
         ("knowledge.obsidian.v1#note.propose", {"zh-CN": "笔记提案", "en-US": "Note proposal"}),
     ],
@@ -463,6 +480,28 @@ def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -
         data.update(_collection_data(ref, proposals.list(), value))
         data["items"] = [_proposal_row(item, bindings, proposals) for item in data["items"]]
     elif ref == "personal.context.v1#contexts":
+        if value.get("purpose") == "mail-drafting":
+            if value.get("context_id", "academic-mail") != "academic-mail":
+                raise ValueError("mail-drafting requires the academic-mail context")
+            person_id = value.get("person_id")
+            active = store.context("academic-mail", person_id, drafting=True)
+            policy = load_markdown_policies(workspace=store.paths.workspace)
+            active["drafting_policy"] = {
+                "digest": policy.digest,
+                "source_versions": policy.source_versions,
+                "documents": [{"knowledge_id": doc.knowledge_id, "source_ref": doc.source_ref,
+                               "sha256": doc.digest, "content": doc.content} for doc in policy.documents],
+            }
+            if person_id:
+                relay = store.relay("search", entity=person_id)
+                active["mail_memories"] = [
+                    item for item in _relay_projection(relay, "memories") if item["status"] == "approved"
+                ]
+                active["relay"] = {key: item for key, item in relay.items() if key != "items"}
+            active["source_refs"] = list(dict.fromkeys([*active["source_refs"], *policy.refs,
+                *(source for item in active.get("mail_memories", []) for source in item["source_refs"])]))
+            return {"kind": "data", "state": "ready", "result_schema": contract["result"],
+                    "input_schema": contract["input"], "data": {"active_context": active}}
         items = []
         for item in store.list("contexts"):
             fields = {"context_id": item["id"], "title": item["title"], "summary": item["summary"],
@@ -527,6 +566,13 @@ def _inbox_read(ref: str, contract: dict[str, Any], value: dict[str, Any], *, ac
 
 
 def _execute(ref: str, contract: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
+    if ref == "communications.mail.v1#draft.feedback.propose":
+        proposals = ProposalStore()
+        bundle = build_mail_feedback_proposal(value, proposals.paths)
+        if bundle is None:
+            return {"kind": "action", "status": "this-draft", "execution_policy": "no_write",
+                    "result_schema": contract["result"]}
+        return _proposal_result(contract, proposals.persist_bundle(bundle))
     builder = PROPOSAL_BUILDERS.get(ref)
     if builder is not None:
         return _proposal_result(contract, ProposalStore().persist_bundle(builder(value)))

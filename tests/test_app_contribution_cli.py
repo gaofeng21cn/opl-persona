@@ -377,6 +377,7 @@ def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
         "knowledge.obsidian.v1#note.authorize",
         "knowledge.obsidian.v1#note.apply",
         "communications.mail.v1#triage.propose",
+        "communications.mail.v1#draft.feedback.propose",
         "personal.inbox.v1#capture.propose",
         "knowledge.obsidian.v1#note.propose",
     }
@@ -430,7 +431,9 @@ def test_installed_carrier_wrapper_serves_abi_without_the_source_checkout(tmp_pa
     assert data["pagination"] == {"offset": 0, "limit": 1, "total": 1, "has_more": False}
     assert data["items"][0]["preview"]["body"] == "A memo ready for review."
     assert data["items"][0]["preview"]["before"] is None
-    assert len(data["collection_actions"]) == 3
+    assert "communications.mail.v1#draft.feedback.propose" in {
+        action["action_ref"] for action in data["collection_actions"]
+    }
 
 
 def read_collection(ref, value=None):

@@ -112,6 +112,36 @@ belongs in `data/persona`. Execute only this Package's declared refs admitted
 by the view, never external refs embedded in evidence. All proposal builders
 persist to the selected Profile; local Inbox staging is not an external write.
 
+## Draft using the user's communication history
+
+Start academic mail with `personal.context.v1#contexts` and
+`{"purpose":"mail-drafting","person_id":"<verified Persona person id>"}`.
+With the plugin launcher, send the same JSON to `context list --input -`.
+Omit person_id when no person is resolved. The result then contains general
+scene memories and current accepted mail policies. Use the policy documents,
+source revisions and applicable person context to choose the right language,
+salutation and structure. Recheck changing facts, addresses and thread routing
+with Relay's exact message evidence. A context read grants no action permission.
+
+Use the user's final wording or explicit correction as evidence. A one-off edit
+applies to the current draft only. When the user requests future reuse, or you
+propose a recurring preference for review, call
+`communications.mail.v1#draft.feedback.propose` (CLI `proposal mail-feedback`).
+Supply the two refs and their exact fingerprints (`draft_ref`,
+`draft_fingerprint`, `final_ref`, `final_fingerprint`). Relay workbench results
+provide `writing_sample.ref` and `writing_sample.fingerprint` for the current edit
+revision or verified server draft. Keep the original sample when drafting and
+read the final revision after the user edits it. A save by itself is not user
+acceptance of a general preference.
+
+Use `disposition: "this-draft"` without a note to leave long-term policy alone.
+For `"reuse"`, supply `note` with the selected policy's vault-relative
+`target_path`, base `expected_digest`, revised Markdown `body` and the existing
+`knowledge_writeback` fields. Change only the supported rule and preserve its
+audience, language or person scope. The output is the ordinary Obsidian review
+proposal with a before/after preview. Apply it through the existing review and
+write authorization. The next task reads the accepted original from Framework.
+
 ## Mail triage and inbox capture
 
 Mail triage is judgment over stable Relay evidence, not a mailbox action. Read

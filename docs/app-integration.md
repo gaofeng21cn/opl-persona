@@ -59,6 +59,11 @@ approved 且来源仍有效的派生记录，编辑记忆须重新审核。人�
 Framework 判定来源无效时，管理视图保留修复身份但隐藏旧摘要内容；消费方显示
 `excluded_knowledge` 的局部缺口，不从旧表单输入恢复被隐藏的内容。
 
+用户把草稿修改限定在本次时，Persona 直接沿用该次定稿。需要长期沿用时，调用
+`communications.mail.v1#draft.feedback.propose`，把初稿和定稿的引用及版本带入同一个
+笔记差异提案。Studio 通过现有提案视图显示变更和审核动作。写回成功后，由 Persona 的
+学术邮件上下文读取 Framework 接受的新版本。
+
 Obsidian read model 提供当前 notes.write binding；只有一个时可预填 binding_id，不默认
 授权。用户先批准提案，再通过 note.authorize 对精确 proposal/digest/binding 提交独立
 approval_ref 和 confirmation=confirmed。已有授权覆盖当前精确目标与改动时，受托维护者可记录

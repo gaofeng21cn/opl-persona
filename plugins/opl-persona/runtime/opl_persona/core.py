@@ -14,6 +14,7 @@ from .policy import (
     load_mail_context,
     load_markdown_policies,
     resolve_manuscript_context,
+    selected_mail_policy_ids,
 )
 
 SCHEMA_VERSION = "opl-persona-proposal.v1"
@@ -21,6 +22,7 @@ RELAY_TRIAGE_EVIDENCE_SCHEMA = "opl-relay-mail-triage-evidence.v2"
 RELAY_POLICY_DIGEST_SCOPE = "relay_policy_refs.v1"
 _EMAIL_STORE_REF = re.compile(r"^email-store://[^/\s]+/[^/\s]+/[1-9][0-9]*/[0-9a-f]{16}$")
 OBSIDIAN_NOTE_CONTRACT = "knowledge.obsidian.note.v1"
+_DRAFT_FEEDBACK_FIELDS = ("draft_ref", "draft_fingerprint", "final_ref", "final_fingerprint")
 
 
 def _now() -> str:
@@ -700,7 +702,8 @@ def _expected_digest(payload: Mapping[str, Any], operation: str) -> str:
     raise ValueError("expected_digest must be absent for create or a sha256 digest for update")
 
 
-def build_obsidian_note_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
+def build_obsidian_note_proposals(payload: Mapping[str, Any], *,
+                                  draft_feedback: dict[str, str] | None = None) -> dict[str, Any]:
     """Create a proposal for an owner adapter to create or update one note.
 
     The proposal has a target precondition but does not read or write a vault.
@@ -743,6 +746,18 @@ def build_obsidian_note_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
                 or not isinstance(registration["item"], Mapping)):
             raise ValueError("knowledge_registration requires a create, registry_ref and Framework item")
         note_payload["knowledge_registration"] = dict(registration)
+    if draft_feedback is not None:
+        writeback = note_payload.get("knowledge_writeback")
+        if not writeback or writeback["content_kind"] != "policy":
+            raise ValueError("draft feedback requires a registered policy update")
+        if (not isinstance(draft_feedback, dict) or set(draft_feedback) != set(_DRAFT_FEEDBACK_FIELDS)
+                or not all(isinstance(value, str) and value.strip() for value in draft_feedback.values())
+                or not all(re.fullmatch(r"sha256:[0-9a-f]{64}", draft_feedback[key])
+                           for key in ("draft_fingerprint", "final_fingerprint"))
+                or evidence_refs != list(dict.fromkeys((draft_feedback["draft_ref"], draft_feedback["final_ref"])))):
+            raise ValueError("draft feedback must bind both exact evidence revisions")
+        note_payload["draft_feedback"] = draft_feedback
+        note_payload["source_versions"] = {writeback["knowledge_id"]: expected_digest}
     proposal = _proposal(
         kind=OBSIDIAN_NOTE_CONTRACT,
         # Bind identity to the exact replacement bytes so each accepted source
@@ -771,6 +786,30 @@ def build_obsidian_note_proposals(payload: Mapping[str, Any]) -> dict[str, Any]:
         target_path,
         evidence_refs,
         [proposal],
+    )
+
+
+def build_mail_feedback_proposal(payload: Mapping[str, Any], paths: PersonaPaths) -> dict[str, Any] | None:
+    """Stage a change to the selected mail policy using a draft and its reviewed revision."""
+    feedback = {key: _required(payload, key) for key in _DRAFT_FEEDBACK_FIELDS}
+    if not all(re.fullmatch(r"sha256:[0-9a-f]{64}", feedback[key])
+               for key in ("draft_fingerprint", "final_fingerprint")):
+        raise ValueError("draft and final fingerprints must be sha256 digests")
+    note = payload.get("note")
+    if payload["disposition"] == "this-draft":
+        if note is not None:
+            raise ValueError("this-draft feedback cannot include a policy change")
+        return None
+    if not isinstance(note, dict) or set(note) - {"target_path", "body", "expected_digest", "knowledge_writeback"}:
+        raise ValueError("reusable feedback requires a replacement Markdown body and selected policy identity")
+    writeback = note.get("knowledge_writeback")
+    if (not isinstance(writeback, dict) or writeback.get("content_kind") != "policy"
+            or writeback.get("knowledge_id") not in selected_mail_policy_ids(paths)):
+        raise ValueError("feedback must target an accepted policy selected for mail")
+    evidence_refs = list(dict.fromkeys((feedback["draft_ref"], feedback["final_ref"])))
+    return build_obsidian_note_proposals(
+        {**note, "operation": "update", "evidence_refs": evidence_refs},
+        draft_feedback=feedback,
     )
 
 

@@ -37,6 +37,10 @@ Relay 的公开能力包 ABI 读取，不访问其数据库。分诊、捕获和
 跨 CLI 调用持久化；查看、批准和拒绝绑定精确 digest。Obsidian 应用需要独立、基于用户授权的精确
 资源授权，返回持久化的真实 readback；批准提案不授权发信或发布。
 
+起草学术邮件时，Persona 会结合你现行的沟通规则和相关人物背景。你可以说“这次这样改”，也可以
+说“以后同类邮件沿用”。后者会生成对现有知识笔记的修订提案，审核并写回后在下次起草时生效。
+详见[邮件起草与反馈](docs/mail-policy.md)。
+
 `context list/select/update`、`people list/update`、`memory list/update/review` 和
 `proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian` 共用 JSON 合同
 （`--input <文件或->`）。并发 CLI 写入共用跨平台锁与 data/persona 内的原子保存。Studio
