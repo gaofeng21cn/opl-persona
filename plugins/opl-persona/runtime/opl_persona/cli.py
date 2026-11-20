@@ -40,6 +40,7 @@ WORKSPACE_COMMANDS = {
                  "inspect": ("execute", "personal.context.v1#proposal.inspect"),
                  "approve": ("execute", "personal.context.v1#proposal.approve"),
                  "reject": ("execute", "personal.context.v1#proposal.reject"),
+                 "mail-feedback": ("execute", "communications.mail.v1#draft.feedback.propose"),
                  "authorize-obsidian": ("execute", "knowledge.obsidian.v1#note.authorize"),
                  "apply-obsidian": ("execute", "knowledge.obsidian.v1#note.apply")},
 }

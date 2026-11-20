@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ from opl_persona.proposals import ProposalStore
 
 FRAMEWORK = os.environ.get("OPL_FRAMEWORK_ROOT")
 pytestmark = pytest.mark.skipif(not FRAMEWORK, reason="OPL_FRAMEWORK_ROOT is required for the real Framework CLI")
+LAUNCHER = Path(__file__).parents[1] / "plugins/opl-persona/bin/opl-persona"
 
 
 @pytest.mark.parametrize("external", [False, True], ids=["workspace-markdown", "external-markdown"])
@@ -65,18 +67,68 @@ def test_actual_framework_roundtrip_source_change_and_revocation(tmp_path, monke
     set_resource_binding(workspace, binding_id="authoring", capability_id="knowledge.obsidian.v1",
                          provider_id="obsidian", resource_ref=source.as_uri(), scopes=["notes.read", "notes.write"])
     proposals = ProposalStore(store.paths)
-    item = proposals.persist_bundle(build_obsidian_note_proposals({
+    writeback = {
+        "knowledge_id": "synthetic.research.principle",
+        "target_scope": {"kind": "topic", "id": "synthetic.research"},
+        "content_kind": "policy",
+        "proposed_rule_or_mechanism": "Separate evidence from interpretation",
+        "evidence_class": "synthetic",
+        "review_requirement": "owner review",
+    }
+    note_change = {
         "operation": "update", "target_path": note.name, "expected_digest": digest,
-        "frontmatter": {}, "body": "# Changed principle\nSource requires another review.",
+        "frontmatter": {}, "body": "# Changed principle\nSource requires another review.\nClose conference follow-ups with よろしくお願いいたします。",
         "links": [], "tags": [], "evidence_refs": ["knowledge://synthetic.research.principle"],
-        "knowledge_writeback": {"knowledge_id": "synthetic.research.principle", "target_scope": {"kind": "topic", "id": "synthetic.research"}, "content_kind": "policy", "proposed_rule_or_mechanism": "Changed principle", "evidence_class": "synthetic", "review_requirement": "owner review"},
-    }))["stored_items"][0]
+        "knowledge_writeback": writeback,
+    }
+    if external:
+        (store.paths.data_root / "knowledge-inputs.json").write_text(json.dumps({
+            "schema_version": "opl-persona-knowledge-inputs.v1",
+            "roles": {"mail_policy": [writeback["knowledge_id"]]},
+        }))
+        context_input = {"purpose": "mail-drafting"}
+        feedback = {
+            "draft_ref": "relay-draft://synthetic/reply?revision=1",
+            "draft_fingerprint": "sha256:" + "1" * 64,
+            "final_ref": "relay-draft://synthetic/reply?revision=2",
+            "final_fingerprint": "sha256:" + "2" * 64,
+        }
+
+        def cli(*arguments, payload):
+            result = subprocess.run([str(LAUNCHER), "--json", *arguments, "--input", "-"],
+                                    input=json.dumps(payload), text=True, capture_output=True, timeout=45)
+            assert result.returncode == 0, result.stdout or result.stderr
+            return json.loads(result.stdout)["result"]
+
+        baseline = cli("context", "list", payload=context_input)["data"]["active_context"]
+        assert baseline["drafting_policy"]["source_versions"] == {writeback["knowledge_id"]: digest}
+        assert not baseline["external_write_allowed"]
+        once = cli("proposal", "mail-feedback", payload=feedback | {"disposition": "this-draft"})
+        assert once["status"] == "this-draft"
+        assert proposals.list() == []
+        reusable = cli("proposal", "mail-feedback", payload=feedback | {
+            "disposition": "reuse",
+            "note": {key: note_change[key] for key in ("target_path", "body", "expected_digest", "knowledge_writeback")},
+        })
+        item = reusable["proposal_bundle"]["stored_items"][0]
+        assert item["status"] == "pending"
+        assert item["proposal"]["payload"]["draft_feedback"] == feedback
+        pending = cli("context", "list", payload=context_input)["data"]["active_context"]
+        assert pending["drafting_policy"] == baseline["drafting_policy"]
+    else:
+        item = proposals.persist_bundle(build_obsidian_note_proposals(note_change))["stored_items"][0]
     identity = {"proposal_id": item["id"], "expected_digest": item["proposal_digest"]}
     proposals.review(**identity, decision="approved", approval_ref="approval://synthetic/review")
     proposals.authorize_obsidian(**identity, binding_id="authoring", approval_ref="approval://synthetic/write", confirmation="confirmed", knowledge_review={"reviewer": "synthetic.owner", "reviewed_at": "2026-11-09T00:00:00Z", "next_review_at": "2099-01-01T00:00:00Z"})
     proposals.apply_obsidian(**identity, binding_id="authoring", external_approval_ref="approval://synthetic/write")
     assert "Changed principle" in note.read_text()
-    assert json.loads(registry_path.read_text())["items"][0]["body_ref"]["sha256"] == "sha256:" + hashlib.sha256(note.read_bytes()).hexdigest()
+    accepted = "sha256:" + hashlib.sha256(note.read_bytes()).hexdigest()
+    assert json.loads(registry_path.read_text())["items"][0]["body_ref"]["sha256"] == accepted
+    if external:
+        recalled = cli("context", "list", payload=context_input)["data"]["active_context"]["drafting_policy"]
+        assert recalled["source_versions"] == {writeback["knowledge_id"]: accepted}
+        assert recalled["documents"][0]["content"] == note.read_text()
+        assert "よろしくお願いいたします。" in recalled["documents"][0]["content"]
     assert store.context("research-writing")["memories"] == []
     assert read_knowledge_source("synthetic.research.principle", store.paths)["content"] == note.read_text()
     # Reverting bytes cannot bypass an explicit source grant withdrawal.

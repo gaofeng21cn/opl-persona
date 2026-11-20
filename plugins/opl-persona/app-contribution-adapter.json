@@ -73,6 +73,13 @@
       "stdin": "request_json",
       "passthrough": true
     },
+    "communications.mail.v1#draft.feedback.propose": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
     "personal.inbox.v1#capture.propose": {
       "kind": "command",
       "cwd": "package",

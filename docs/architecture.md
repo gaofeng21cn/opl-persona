@@ -100,6 +100,13 @@ and the same source-version binding. A memory edit always resets it to `candidat
 approved entries; `status=all` includes forgotten records. This review state
 does not replace a fresh source check.
 
+The academic-mail drafting read opts into `purpose=mail-drafting`. It adds
+source-verified Markdown policy and separates general scene memory from the
+selected person's memory. Draft feedback binds the original and corrected
+revisions to the existing Obsidian writeback proposal. The policy stays in its
+original source and takes effect on the next read after acceptance. See
+[Mail Policy](mail-policy.md).
+
 `source_versions` is a non-empty object mapping accepted knowledge identities
 to exact `sha256:...` revisions. For people, memories and customized modes,
 Persona stores a derived summary plus these dependencies in

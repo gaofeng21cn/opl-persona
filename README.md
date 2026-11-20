@@ -49,6 +49,11 @@ persist across CLI runs; inspect/approve/reject bind their exact digest.
 Obsidian application needs a separate, exact resource grant grounded in user authorization and
 returns a persisted authority readback. Review never authorizes send/publish.
 
+Academic mail can use your current communication rules alongside relationship
+context. Ask Persona to keep a correction for this draft or propose it as a
+lasting preference. It takes effect in later drafts after you review and apply
+the change to your existing note. See [mail drafting and feedback](docs/mail-policy.md).
+
 `context list/select/update`, `people list/update`, `memory list/update/review`,
 and `proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian`
 share the Package JSON contracts (`--input <file-or->`). Concurrent CLI writers

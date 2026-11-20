@@ -59,7 +59,7 @@ def _proposal_identity(proposal: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("proposal target_path does not match payload")
     builder_input = dict(payload)
     builder_input["operation"] = proposal.get("operation")
-    expected = build_obsidian_note_proposals(builder_input)["proposals"][0]
+    expected = build_obsidian_note_proposals(builder_input, draft_feedback=payload.get("draft_feedback"))["proposals"][0]
     for field in (
         "proposal_id",
         "proposal_kind",

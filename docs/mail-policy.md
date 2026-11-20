@@ -38,6 +38,17 @@ Reply-drafting policy is registered in place and selected as another `mail_polic
 ID. It participates in the same source-version map and content digest; its local
 filename is not an implicit authority.
 
+For a draft, read `personal.context.v1#contexts` with `purpose=mail-drafting`.
+The academic-mail response pairs accepted policy bodies and their source revisions
+with approved memories for the scene and the selected person, if one was supplied.
+Relay provides the original conversation and recipient routing. A user-approved
+correction can become a prospective policy change through
+`communications.mail.v1#draft.feedback.propose`. The caller supplies the refs
+and fingerprints for the draft and corrected revision. `this-draft` creates no
+proposal. `reuse` opens an ordinary note proposal for an existing selected policy
+at its current base hash. A pending proposal never enters drafting context.
+After the owner applies and accepts the revision, later reads use the new body.
+
 Only these role names and lists of unique knowledge IDs are accepted. An empty
 or omitted `identity`, `team`, or `projects` role means that those facts are
 unavailable. Mail triage requires at least one `mail_policy` ID. Source roots,
