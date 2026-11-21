@@ -12,28 +12,34 @@ Machine boundary: 可恢复任务提供当前的本机操作入口。站点专�
 
 ## 当前实现边界
 
-在 macOS 上，Persona 可在已登录的目标窗口填写经审核的文字字段、提交指定表单并回读结果。
-一个任务可依序串联这些操作及已有的笔记提案。它使用 agent-desktop 和系统辅助功能，
-每一步由目标应用或提案的负责人提供结果。Studio 的「可恢复任务」与 Codex 的任务命令
-共用同一份记录。
+Persona 可在已登录的目标网页或 macOS 窗口填写经审核的文字字段、提交指定表单并回读结果。
+一个任务可依序串联这些操作及已有的笔记提案。Studio 的「可恢复任务」与 Codex 的任务命令
+共用同一份记录。邮件、笔记或网站有专用接口时优先使用该接口。
 
-1. 由用户登录目标系统并打开记录。用 `agent-desktop list-windows` 取得窗口和进程身份，
-   用 `snapshot` 核对控件、记录和账号的可见标识。门户步骤另需精确 URL。
+1. 由用户登录目标系统并打开记录。网页表单使用 agent-browser 0.42 或更新版本。
+   通过 `opl-persona browser open --session <名称> --url <网址>` 打开独立浏览器，在其中登录。
+   用 `opl-persona browser inspect --session <名称>` 读取当前网址、标签页 ID 和可访问内容。
+   各会话的账号状态存于个人工作区的 `data/persona/browser/` 下，可以并行处理。
+   用 `opl-persona browser close --session <名称>` 关闭本次会话，已保存的登录状态留在原资料目录。
+   对于原生窗口，用 `agent-desktop list-windows` 取得窗口和进程身份，再用 `snapshot` 核对控件和记录。
 2. 用 `opl-persona task prepare --input -` 准备任务。输入包含 `task_id`、`title`，
    以及 `plan.source_refs` 和有序的 `plan.steps`。每一步含 `kind`、`title`、`input`。
    - `fill` 接受 `target`、唯一文字字段的名称 `field`、之前的值 `before` 和拟填写的 `value`。
    - `submit` 接受 `target`、按钮名称 `button`、表单的已审字段和值 `fields`，以及回执目标 `result`。
    - `proposal` 通过 `proposal_id` 与 `expected_digest` 引用现有提案。使用其负责人原有的审核和应用入口。
-   - `target` 包含 `app`、`window_id`、`process_instance`、唯一记录的可见 `marker`。
-     门户另含 `page_url` 和当前登录账号的可见 `account_marker`。提交结果沿用同一窗口、
-     账号和站点，使用该记录专属的回执标识。只在任务中使用本次审核适用的非秘密字段。
+   - 浏览器的 `target` 包含 `browser_session`、`tab_id`、`page_url`、可见记录标识 `marker`
+     和可见账号标识 `account_marker`。原生窗口使用 `app`、`window_id`、`process_instance`
+     和 `marker`。原生窗口中的门户同样需要精确网址与账号。
+   - 提交结果沿用同一标签页或窗口、账号和站点，使用该记录专属的回执标识。
+     任务仅处理经审核的普通字段。登录和受保护字段由用户直接在网站处理。
 3. 查阅当前步骤的提案并批准。调用 `task run` 时提供任务编号、当前 `proposal_id`、
-   `expected_digest` 和用户确认的 `confirmation: "confirmed"`。在 Studio 启动已审操作后，
-   把目标窗口切到前台。它只等待短时间。锁屏、切到别的记录或字段已变时，回到任务核对目标。
+   `expected_digest` 和用户确认的 `confirmation: "confirmed"`。原生窗口操作启动后，把目标窗口
+   切到前台。浏览器会话始终绑定所选标签页。账号、记录或字段变化时，回到任务核对目标。
 4. 换对话或重启后用 `task list`、`task inspect` 找原任务。结果待核对时运行
    `task check`。它检查原操作结果并保存回执。门户窗口重开后可以传入新的
-   `window: {window_id, process_instance}`，它仍核对原站点、账号和回执标识。
-   已经派发且结果待核对的步骤只能通过回读推进。外部状态仍不明确时，由用户检查站点记录。
+   `window: {window_id, process_instance}`。独立浏览器可在同一会话打开原回执页后传入新的
+   `tab_id`。两种方式都核对原网址、账号和回执标识。
+   本会话有已派发且待核对的步骤时，先查原结果再执行新动作。其他独立浏览器会话可以继续工作。
 
 下面的站点档案和专用接口仍属于后续设计。已实装的任务使用 `personal.context.v1#task.*`。
 

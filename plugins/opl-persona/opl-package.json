@@ -50,6 +50,7 @@
       "app-contribution-adapter.json",
       "runtime/opl_persona/app_contributions.py",
       "runtime/opl_persona/bindings.py",
+      "runtime/opl_persona/browser_tools.py",
       "runtime/opl_persona/cli.py",
       "runtime/opl_persona/core.py",
       "runtime/opl_persona/inbox.py",
@@ -66,7 +67,7 @@
       "skills/opl-persona/agents/openai.yaml",
       "runtime/opl_persona/_opl_profile_workspace.py"
     ],
-    "digest": "sha256:bad465597355d9a7ad762e18a2a7d9a3364ef87db8504e90e2f5fb2e138b2caa"
+    "digest": "sha256:0ae92851fc4ff1e8dadc14aa7d1ff69350d3df05d8a939a2cc27df82478606ca"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",

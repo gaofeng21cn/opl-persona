@@ -64,29 +64,37 @@ launcher is a self-contained fallback for the same JSON ABI.
 ## Resumable local tasks
 
 Reuse the mail, knowledge or website owner's direct operation when it covers
-the task. For approved input in a local macOS window, have the user open the
-target application in the correct account. Observe the exact window, page,
-record and control with agent-desktop. Use its accessible identity, and route
-the input through Persona to retain the approval and delivery state.
+the task. For web forms, use agent-browser 0.42 or newer through
+`opl-persona browser open --session <name> --url <approved-url>`.
+Have the user sign in to that private browser when needed. Use
+`browser inspect --session <name>` to find the active tab, accessible controls
+and visible account and record. Distinct sessions have their own Chromium
+profiles and run concurrently. Close a session through `browser close`.
+For a local macOS window, observe the exact frontmost window and controls
+with agent-desktop. Keep the approved input and the result in the Persona task.
 
 - `task prepare --input -` takes a stable `task_id`, `title`, and a `plan`
   containing `source_refs` and ordered `steps`. A step contains `kind`,
   `title` and `input`. Each `fill` gives a `target`, unique `field`,
   `before` and `value`. A `submit` gives a `target`, exact `button`,
   reviewed `fields` map and a distinct `result` target for the receipt.
-  Targets use `app`, `window_id`, `process_instance` and the visible
-  record `marker`. In a portal, provide exact `page_url` and
-  `account_marker`. A linked `proposal` step uses its `proposal_id` and
+  Browser targets use `browser_session`, `tab_id`, exact `page_url`, and
+  visible `marker` and `account_marker`. Desktop targets use `app`,
+  `window_id`, `process_instance` and `marker`, plus `page_url` and
+  `account_marker` for portals. A linked `proposal` step uses its `proposal_id` and
   `expected_digest`. Explicitly identify what the user has authorized.
 - Show the current proposal, review it through the existing proposal flow, and
   run `task run` with `task_id`, the exact `proposal_id`, `expected_digest`
-  and the user's `confirmation` of `confirmed`. Bring the reviewed window
-  to the foreground. Prefer native authorization for secrets and sign-in.
+  and the user's `confirmation` of `confirmed`. Bring a reviewed native
+  window to the foreground. Have the user handle sign-in and protected fields.
 - In a new conversation, use `task list` or `task inspect` with the same
   `task_id`. For an attempted step, run `task check`. A returned result
   requires the original target's visible effect or the linked owner's receipt.
-  If the portal reopens in another window, `task check` accepts the new
-  `window_id` and `process_instance` in a `window` object for readback.
+  If the portal reopens in a different native window, `task check` accepts the
+  new `window_id` and `process_instance` in a `window` object. If Chromium
+  reopens the original receipt in the same browser session, pass the new
+  `tab_id`. Both replacements are for readback only.
+  Check any pending result before delivering new input in that session.
   Resolve a missing or uncertain external result at the original target before
   preparing another submission. Use the existing owner flow for linked
   proposals, then check them from the same task.

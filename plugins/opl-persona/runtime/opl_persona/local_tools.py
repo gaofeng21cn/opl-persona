@@ -37,6 +37,15 @@ def _page_identity(value):
 
 
 def normalize_target(value):
+    if isinstance(value, dict) and "browser_session" in value:
+        value = strict_object(value, required=("browser_session", "tab_id", "page_url", "marker", "account_marker"))
+        target = {key: text(item, key, 2048) for key, item in value.items()}
+        browser_session_name(target["browser_session"])
+        browser_tab_id(target["tab_id"])
+        _page_identity(target["page_url"])
+        if target["marker"] == target["account_marker"]:
+            raise ValueError("Review the record and signed-in account separately")
+        return target
     value = strict_object(value, required=("app", "window_id", "process_instance", "marker"),
                           optional=("page_url", "account_marker"))
     target = {key: text(item, key, 2048) for key, item in value.items()}
@@ -47,6 +56,18 @@ def normalize_target(value):
             raise ValueError("a portal requires a visible signed-in account")
         _page_identity(target["page_url"])
     return target
+
+
+def browser_session_name(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}", value):
+        raise ValueError("Use a browser session name of 1–32 letters, digits, hyphens or underscores")
+    return value
+
+
+def browser_tab_id(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9A-Fa-f]{32}", value):
+        raise ValueError("Use the tab_id from opl-persona browser inspect")
+    return value
 
 
 def _field_value(value):
@@ -68,9 +89,9 @@ def normalize_action(kind, value):
         raise ValueError("submit requires the reviewed form fields")
     target = normalize_target(value["target"])
     result = normalize_target(value["result"])
-    for key in ("app", "window_id", "process_instance", "account_marker"):
+    for key in ("app", "window_id", "process_instance", "account_marker", "browser_session", "tab_id"):
         if target.get(key) != result.get(key):
-            raise ValueError("submission readback must stay in the same window and account")
+            raise ValueError("submission readback must stay in the same window or tab and account")
     if ("page_url" in target) != ("page_url" in result) or target["marker"] == result["marker"]:
         raise ValueError("submission requires a distinct receipt marker in the same program")
     if "page_url" in target and _page_identity(target["page_url"])[:3] != _page_identity(result["page_url"])[:3]:

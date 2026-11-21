@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .app_contributions import handle_request
+from .browser_tools import Browser
 from .core import (
     build_inbox_capture_proposals,
     build_mail_triage_proposals,
@@ -93,6 +94,14 @@ def build_parser() -> argparse.ArgumentParser:
         "app-contribution",
         help="Serve the Package-owned app contribution JSON ABI.",
     )
+    browser = sub.add_parser("browser", help="管理 Profile 中的独立浏览器会话")
+    browser_actions = browser.add_subparsers(dest="browser_action", required=True)
+    for action in ("open", "inspect", "close"):
+        command = browser_actions.add_parser(action)
+        command.add_argument("--session", required=True, help="Profile 中的浏览器会话名称")
+        if action == "open":
+            command.add_argument("--url", required=True, help="打开经过确认的页面")
+            command.add_argument("--headless", action="store_true", help="不打开可见窗口")
     proposal = sub.add_parser("proposal")
     proposal_sub = proposal.add_subparsers(dest="kind", required=True)
     for kind in ("publication", "memo", "mail-triage", "inbox-capture", "obsidian-note"):
@@ -145,6 +154,15 @@ def main(argv: list[str] | None = None) -> int:
             with workspace_lock(paths):
                 result = paths.setup_status() if args.setup_handler == "status" else paths.init_workspace(local_knowledge=args.local_knowledge)
             result = {"ok": True, "setup": result}
+        elif args.command == "browser":
+            browser = Browser(paths, args.session)
+            if args.browser_action == "close":
+                browser.close()
+                result = {"ok": True, "browser_session": args.session}
+            else:
+                observation = (browser.open(args.url, headless=args.headless) if args.browser_action == "open"
+                               else browser.inspect())
+                result = {"ok": True, **observation}
         elif args.command == "binding":
             if args.binding_handler == "list":
                 result = {

@@ -160,12 +160,12 @@ for _verb, _fields in {
     "prepare": {"title": "string", "plan": "object"},
     "inspect": {},
     "run": {"proposal_id": "string", "expected_digest": "string", "confirmation": "string"},
-    "check": {"window": "object"},
+    "check": {"window": "object", "tab_id": "string"},
 }.items():
     _action = TASK_ACTIONS[_verb]
     ACTION_CONTRACTS[_action] = {
         "operation": "execute", "confirmation_required": _verb == "run",
-        "input": {name: {"type": field_type, "required": name != "window"}
+        "input": {name: {"type": field_type, "required": name not in {"window", "tab_id"}}
                   for name, field_type in {"task_id": "string", **_fields}.items()},
         "result": f"{_action}.result",
     }
