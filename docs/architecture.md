@@ -9,8 +9,8 @@ State: `active`
 Machine boundary: This document describes the current Persona implementation.
 The Package descriptor, runtime source, and tests remain machine authority.
 [Architecture Guidance](architecture-guidance.md) owns the cross-repository
-target design; its form and portal surfaces are not current exports merely
-because they are documented.
+target design. [External Professional Work](external-professional-work.md)
+documents the supported local form workflow and its connection to that design.
 
 ## Owner split
 
@@ -32,7 +32,8 @@ store, knowledge vault, or website CMS.
 | OPL Relay | mail identities, raw mail evidence, memory evidence, drafts, send receipts |
 | User-selected knowledge source | canonical personal notes and profile values in Obsidian or a normal Markdown directory |
 | `gflab_web` | public publication/news content and deployment |
-| OPL Persona | derived PI context, source-version dependencies, proposal shape, approval state |
+| OPL Persona | derived PI context, source-version dependencies, proposals and local task continuation |
+| Target application | current form, signed-in account and submission receipt |
 
 The family-wide source, scope and lifecycle rules belong to the
 [Framework knowledge source and memory policy](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md).
@@ -70,7 +71,7 @@ Inbox input -> personal.inbox.v1
 knowledge input -> knowledge.obsidian.note.v1
 ```
 
-The App contribution ABI exposes six data refs. The
+The App contribution ABI exposes task, context, proposal, memory and Inbox data. The
 Persona-owned read-model store serves both `personal.context.v1#today` and
 `personal.inbox.v1#recent` as refs-only projections: `today` includes active
 (`staged` or `routed`) Inbox entries, while `recent` includes all entries. The
@@ -319,13 +320,31 @@ reachability only. The same note writer accepts both selected directory provider
 values are `healthy`, `degraded`, `unavailable`, or `unknown`. A stored health
 observation must not be used as a fresh authorization or content readback.
 
-Persona therefore has no current personal-profile field registry, form model,
-form action, external-portal provider, portal adapter, or submission receipt.
-Those are target designs in
-[Personal Profile and Form Fill](personal-profile-form-fill.md),
-[External Professional Work](external-professional-work.md), and
-[Composable Capability and Integration Model](integration-capability-composition.md).
-They do not become callable through a generic Resource Binding record.
+## Resumable local tasks
+
+`personal.context.v1#tasks` projects task progress and currently available actions.
+`task.prepare` stores an ordered plan and links existing proposals or prepares
+field and submission proposals. Review uses the existing digest-bound proposal
+flow. `task.run` executes the exact reviewed current local action.
+`task.check` reads either the reviewed target or the linked owner's receipt and
+advances the same task once the result is visible.
+
+Persona persists a dispatch marker before calling agent-desktop. A restarted
+executor can only check a dispatched step. An explicit provider result of
+non-delivery permits another confirmed attempt. A per-task process lock serializes
+state changes. A shared macOS lock serializes managed input across profiles,
+including target observation and result readback. The adapter checks console
+availability, exact visible window and process, and, for portal work, the live
+document URL and signed-in account marker. Each control needs a unique native
+accessibility identity. The native tool delivers the action. The target page or
+owning app supplies the result. The task stores a timestamped readback reference.
+
+The initial workflow links reviewed desktop text entry and form submission to
+other app proposals whose owners already expose an applied receipt. The
+supported input and recovery paths live in
+[External Professional Work](external-professional-work.md). Bulk field mapping
+and reusable personal profile fields remain a separate design in
+[Personal Profile and Form Fill](personal-profile-form-fill.md).
 
 ## Runtime data
 
@@ -342,7 +361,7 @@ canonical home. Existing external sources stay in place. Setup readiness has
 the scope `runtime_configuration` and does not claim complete personal data,
 valid knowledge grants or business readiness.
 
-CLI mutations, including setup and binding changes, share
+Workspace mutations, including setup and binding changes, share
 `data/persona/.workspace.lock`. POSIX uses `flock`; Windows uses a stable
 single-byte `msvcrt` lock. Read/modify/write runs entirely under this lock;
 JSON saves fsync the temporary file and atomically replace the destination,

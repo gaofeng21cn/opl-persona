@@ -3,7 +3,7 @@
 Owner: `opl-persona`
 Purpose: `external_professional_work_target_design`
 State: `active_target_design`
-Machine boundary: 本文定义 Persona-owned 对外专业工作目标边界。当前 Package descriptor、runtime 与 tests 尚未导出 external portal capability、action、schema、adapter 或 receipt；下文 scope、target、workflow 和分阶段条目在对应 contracts/source/tests 与第三方 portal readback 出现前都不是当前可调用行为、外部写入授权或完成证明。
+Machine boundary: 可恢复任务提供当前的本机操作入口。站点专用账户档案、角色权限目录和站点适配器定义后续专业工作。
 
 本文件是 OPL Persona 中“对外专业工作（External Professional Work）”子域的
 目标设计权威。它扩展
@@ -12,12 +12,30 @@ Machine boundary: 本文定义 Persona-owned 对外专业工作目标边界。�
 
 ## 当前实现边界
 
-当前 owner descriptor 只导出 Persona context、memory、Inbox、Obsidian、mail 和
-website proposal 能力；runtime 已实现 Profile Workspace、Resource Binding、Inbox、
-mail triage 与 Obsidian proposal 路径。它尚未提供本文提出的
-`external_work_item.v1`、`external_portal_profile.v1`、`external_action_receipt.v1`
-或任何 portal submit action。这里的名字是后续 owner contract 候选，不得被 App、
-Framework、Skill 或自动化当成已安装、已发布或可执行接口。
+在 macOS 上，Persona 可在已登录的目标窗口填写经审核的文字字段、提交指定表单并回读结果。
+一个任务可依序串联这些操作及已有的笔记提案。它使用 agent-desktop 和系统辅助功能，
+每一步由目标应用或提案的负责人提供结果。Studio 的「可恢复任务」与 Codex 的任务命令
+共用同一份记录。
+
+1. 由用户登录目标系统并打开记录。用 `agent-desktop list-windows` 取得窗口和进程身份，
+   用 `snapshot` 核对控件、记录和账号的可见标识。门户步骤另需精确 URL。
+2. 用 `opl-persona task prepare --input -` 准备任务。输入包含 `task_id`、`title`，
+   以及 `plan.source_refs` 和有序的 `plan.steps`。每一步含 `kind`、`title`、`input`。
+   - `fill` 接受 `target`、唯一文字字段的名称 `field`、之前的值 `before` 和拟填写的 `value`。
+   - `submit` 接受 `target`、按钮名称 `button`、表单的已审字段和值 `fields`，以及回执目标 `result`。
+   - `proposal` 通过 `proposal_id` 与 `expected_digest` 引用现有提案。使用其负责人原有的审核和应用入口。
+   - `target` 包含 `app`、`window_id`、`process_instance`、唯一记录的可见 `marker`。
+     门户另含 `page_url` 和当前登录账号的可见 `account_marker`。提交结果沿用同一窗口、
+     账号和站点，使用该记录专属的回执标识。只在任务中使用本次审核适用的非秘密字段。
+3. 查阅当前步骤的提案并批准。调用 `task run` 时提供任务编号、当前 `proposal_id`、
+   `expected_digest` 和用户确认的 `confirmation: "confirmed"`。在 Studio 启动已审操作后，
+   把目标窗口切到前台。它只等待短时间。锁屏、切到别的记录或字段已变时，回到任务核对目标。
+4. 换对话或重启后用 `task list`、`task inspect` 找原任务。结果待核对时运行
+   `task check`。它检查原操作结果并保存回执。门户窗口重开后可以传入新的
+   `window: {window_id, process_instance}`，它仍核对原站点、账号和回执标识。
+   已经派发且结果待核对的步骤只能通过回读推进。外部状态仍不明确时，由用户检查站点记录。
+
+下面的站点档案和专用接口仍属于后续设计。已实装的任务使用 `personal.context.v1#task.*`。
 
 ## 目标与边界
 

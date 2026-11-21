@@ -6,7 +6,8 @@ State: `active_target_design`
 
 本文定义可替换能力的目标组合关系。当前 exports、Binding schema、Inbox 状态和可执行动作
 只在[实现架构](architecture.md)及其源码维护；本文不新增另一套机器合同或兼容入口。
-个人资料、表格、专业门户与 Recipe catalog 尚不是当前可调用能力。
+已实现的本机表单操作从可恢复任务调用。个人字段主源、站点专用适配器和 Recipe catalog
+仍是结构设计。实际入口见[对外专业工作](external-professional-work.md)。
 
 知识的归属、内容性质、主源与运行快照采用
 [Framework 知识来源与记忆政策](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md)。

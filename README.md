@@ -54,6 +54,13 @@ context. Ask Persona to keep a correction for this draft or propose it as a
 lasting preference. It takes effect in later drafts after you review and apply
 the change to your existing note. See [mail drafting and feedback](docs/mail-policy.md).
 
+For a task that spans a form and a knowledge update, ask Persona to prepare the
+steps. Review the selected window, exact fields and submission before each
+action. In Studio, open **Resumable tasks** to find the current step. Use the same
+task ID in a new Codex conversation to check an interrupted result and continue.
+The local form adapter uses macOS Accessibility and agent-desktop.
+[Local tasks and portal setup](docs/external-professional-work.md)
+
 `context list/select/update`, `people list/update`, `memory list/update/review`,
 and `proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian`
 share the Package JSON contracts (`--input <file-or->`). Concurrent CLI writers

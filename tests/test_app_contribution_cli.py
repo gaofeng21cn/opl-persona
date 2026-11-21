@@ -358,6 +358,7 @@ def test_undeclared_ref_is_rejected(monkeypatch, capsys) -> None:
 
 def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
     assert set(DATA_CONTRACTS) == {
+        "personal.context.v1#tasks",
         "personal.context.v1#today",
         "personal.context.v1#proposals",
         "personal.inbox.v1#recent",
@@ -366,6 +367,10 @@ def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
         "personal.memory.v1#memories",
     }
     assert set(ACTION_CONTRACTS) == {
+        "personal.context.v1#task.prepare",
+        "personal.context.v1#task.inspect",
+        "personal.context.v1#task.run",
+        "personal.context.v1#task.check",
         "personal.context.v1#proposal.inspect",
         "personal.context.v1#proposal.approve",
         "personal.context.v1#proposal.reject",

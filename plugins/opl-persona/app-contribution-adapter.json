@@ -1,6 +1,13 @@
 {
   "schema_version": "opl-package-app-contribution-adapter.v1",
   "reads": {
+    "personal.context.v1#tasks": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
     "personal.context.v1#today": {
       "kind": "command",
       "cwd": "package",
@@ -45,6 +52,34 @@
     }
   },
   "actions": {
+    "personal.context.v1#task.prepare": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#task.inspect": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#task.run": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
+    "personal.context.v1#task.check": {
+      "kind": "command",
+      "cwd": "package",
+      "argv": ["./bin/opl-persona", "--json", "app-contribution"],
+      "stdin": "request_json",
+      "passthrough": true
+    },
     "personal.context.v1#proposal.inspect": {
       "kind": "command",
       "cwd": "package",
