@@ -329,17 +329,24 @@ flow. `task.run` executes the exact reviewed current local action.
 `task.check` reads either the reviewed target or the linked owner's receipt and
 advances the same task once the result is visible.
 
-Persona persists a dispatch marker before calling agent-desktop. A restarted
-executor can only check a dispatched step. An explicit provider result of
-non-delivery permits another confirmed attempt. A per-task process lock serializes
-state changes. A shared macOS lock serializes managed input across profiles,
-including target observation and result readback. The adapter checks console
-availability, exact visible window and process, and, for portal work, the live
-document URL and signed-in account marker. Each control needs a unique native
-accessibility identity. The native tool delivers the action. The target page or
-owning app supplies the result. The task stores a timestamped readback reference.
+Persona persists a dispatch marker before calling either tool. A restarted
+executor can only check a dispatched step. A confirmed non-delivery permits
+another reviewed attempt. A per-task process lock serializes state changes.
 
-The initial workflow links reviewed desktop text entry and form submission to
+The agent-desktop adapter uses one input lock across profiles. It checks the
+macOS console, the visible window and process, and the live document URL and
+signed-in account for portal work. The agent-browser adapter gives each
+session a private Chromium profile and input lock. A pending result pauses new
+input in that session while other sessions can run. The browser adapter checks
+the pinned tab identifier, exact URL, and visible account and record before
+input. Both adapters resolve controls by accessible
+identity and verify the effect through the original authority. Task receipts
+record the provider and the observed target digest.
+
+The separate browser input lanes and readback after uncertain delivery follow
+the execution pattern documented by [Linger](https://github.com/simplexai-labs/linger/blob/2f03b64f56f1e7a116d5b19f20a1f3a5fe07b63c/docs/architecture.md#inside-cua-playwright-and-shell).
+
+The workflow links reviewed browser or desktop text entry and form submission to
 other app proposals whose owners already expose an applied receipt. The
 supported input and recovery paths live in
 [External Professional Work](external-professional-work.md). Bulk field mapping

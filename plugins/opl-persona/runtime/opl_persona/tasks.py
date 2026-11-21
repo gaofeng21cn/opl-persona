@@ -7,7 +7,8 @@ import os
 import re
 from contextlib import contextmanager
 
-from .local_tools import Desktop, ToolPaused, desktop_input_lane, normalize_action, strict_object
+from .browser_tools import Browser
+from .local_tools import Desktop, ToolPaused, browser_tab_id, desktop_input_lane, normalize_action, strict_object
 from .paths import PersonaPaths
 from .proposals import ProposalStore
 from .workspace import atomic_json, item_digest, now, refs, text
@@ -38,12 +39,24 @@ def _step(value):
 
 
 class TaskStore:
-    def __init__(self, paths=None, *, desktop=Desktop, input_lane=desktop_input_lane):
+    def __init__(self, paths=None, *, desktop=Desktop, input_lane=desktop_input_lane, browser=Browser):
         self.paths = paths or PersonaPaths.resolve()
         self.root = self.paths.data_root / "tasks"
         self.proposals = ProposalStore(self.paths)
         self.desktop = desktop
         self.input_lane = input_lane
+        self.browser = browser
+
+    @contextmanager
+    def _adapter(self, payload):
+        session = payload["target"].get("browser_session")
+        if session:
+            browser = self.browser(self.paths, session)
+            with browser.lane():
+                yield browser, Browser.provider
+        else:
+            with self.input_lane():
+                yield self.desktop(), "agent-desktop"
 
     def _path(self, task_id):
         return self.root / f"{_task_id(task_id)}.json"
@@ -106,11 +119,12 @@ class TaskStore:
                     proposal = step["input"]
                 else:
                     identifier = f"persona-proposal://task/{task_id}/{digest[7:]}/{index + 1}"
+                    target = step["input"]["target"]
                     stored = self.proposals.persist_bundle({"proposals": [{
                         "schema_version": "opl-persona-proposal.v1",
                         "proposal_id": identifier,
                         "proposal_kind": "personal.local-tools.v1",
-                        "target": step["input"]["target"].get("page_url", step["input"]["target"]["app"]),
+                        "target": target.get("page_url") or target["app"],
                         "operation": step["kind"],
                         "source_refs": source_refs,
                         "payload": {"title": step["title"], "task_id": task_id, "plan_digest": digest,
@@ -118,8 +132,10 @@ class TaskStore:
                         "approval": {"status": "pending", "required": True, "external_write_allowed": False},
                     }]})["stored_items"][0]
                     proposal = {"proposal_id": identifier, "expected_digest": stored["proposal_digest"]}
+                session = step["input"].get("target", {}).get("browser_session")
                 linked.append({"kind": step["kind"], "title": step["title"], "proposal": proposal,
-                               "state": "ready", "attempts": 0})
+                               "state": "ready", "attempts": 0,
+                               **({"browser_session": session} if session else {})})
             record = {"schema_version": "opl-persona-task.v1", "id": task_id, "title": plan["title"],
                       "source_refs": source_refs, "plan_digest": digest, "steps": linked,
                       "created_at": now(), "updated_at": now()}
@@ -165,15 +181,24 @@ class TaskStore:
         atomic_json(path, record)
         return self._project(record)
 
-    def _readback(self, path, record, step, desktop, payload):
-        if desktop.verified(step["kind"], payload):
+    def _require_browser_readback(self, session):
+        # The browser lock makes this observation consistent with dispatch and readback.
+        # The existing task file is the durable receipt, including after process loss.
+        for path in self.root.glob("*.json"):
+            record = self._load(path)
+            step = self._current(record)
+            if step and step.get("browser_session") == session and step["state"] == "attempted":
+                raise ToolPaused(f"Check the result of task {record['id']} before continuing in this browser session.")
+
+    def _readback(self, path, record, step, adapter, provider, payload):
+        if adapter.verified(step["kind"], payload):
             target = payload["result"] if step["kind"] == "submit" else payload["target"]
             return self._change(path, record, step, state="verified",
-                                receipt={"provider": "agent-desktop", "target_digest": item_digest(target),
+                                receipt={"provider": provider, "target_digest": item_digest(target),
                                          "observation": "receipt-visible" if step["kind"] == "submit" else "field-matches"})
         return self._change(path, record, step, blocked="The expected result is not visible. Inspect the original target.")
 
-    def check(self, *, task_id, window=None):
+    def check(self, *, task_id, window=None, tab_id=None):
         with self._owner(task_id) as path:
             record = self._load(path)
             step = self._current(record)
@@ -190,18 +215,23 @@ class TaskStore:
             if step["state"] != "attempted":
                 return self._project(record)
             payload = item["proposal"]["payload"]
+            key = "result" if step["kind"] == "submit" else "target"
+            original = payload[key]
+            if tab_id is not None:
+                if window is not None or "browser_session" not in original:
+                    raise ValueError("A replacement tab requires the original browser session")
+                payload = {**payload, key: {**original, "tab_id": browser_tab_id(tab_id)}}
             if window is not None:
                 window = strict_object(window, required=("window_id", "process_instance"))
                 # A new process/window can supply readback of an exact site/account.
                 # It does not inherit the original permission to deliver input.
-                original = payload["result"] if step["kind"] == "submit" else payload["target"]
-                if "page_url" not in original:
+                if "page_url" not in original or "browser_session" in original:
                     raise ValueError("Readback in a replacement window requires the original portal URL and account")
                 replacement = {**original, **{key: text(value, key, 128) for key, value in window.items()}}
-                payload = {**payload, ("result" if step["kind"] == "submit" else "target"): replacement}
+                payload = {**payload, key: replacement}
             try:
-                with self.input_lane():
-                    return self._readback(path, record, step, self.desktop(), payload)
+                with self._adapter(payload) as (adapter, provider):
+                    return self._readback(path, record, step, adapter, provider, payload)
             except ToolPaused as exc:
                 return self._change(path, record, step, blocked=str(exc))
 
@@ -223,16 +253,17 @@ class TaskStore:
             payload = item["proposal"]["payload"]
             kind = step["kind"]
             try:
-                with self.input_lane():
-                    desktop = self.desktop()
-                    ref = desktop.preflight(kind, payload)
+                with self._adapter(payload) as (adapter, provider):
+                    if step.get("browser_session"):
+                        self._require_browser_readback(step["browser_session"])
+                    ref = adapter.preflight(kind, payload)
                     if ref is None:
-                        return self._readback(path, record, step, desktop, payload)
+                        return self._readback(path, record, step, adapter, provider, payload)
                     step["attempts"] += 1
                     self._change(path, record, step, state="attempted")
-                    if desktop.dispatch(kind, ref, payload) is False:
+                    if adapter.dispatch(kind, ref, payload) is False:
                         return self._change(path, record, step, state="ready",
                                             blocked="The tool reported that input was not delivered. Verify the target before continuing.")
-                    return self._readback(path, record, step, desktop, payload)
+                    return self._readback(path, record, step, adapter, provider, payload)
             except ToolPaused as exc:
                 return self._change(path, record, step, blocked=str(exc))
