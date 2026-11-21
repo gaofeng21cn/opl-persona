@@ -19,7 +19,7 @@ Package descriptor 声明入口不代表相应账号、vault 或网站已配置�
 Framework route readback、Provider Binding 健康以及 App 实际渲染是不同证据。
 Persona 不在本仓保存 App 功能完成表、已安装包清单或其他 owner 的待办。
 
-Framework 当前仅投影 `app_contributions.ui[]`。Persona 的六个视图均声明为现有
+Framework 当前仅投影 `app_contributions.ui[]`。Persona 各视图均声明为现有
 `settings.section` slot 中的 view，使用 `trust_tier=declarative`、`scope=root` 和
 精确 view_id/contribution_id/sort_order。仅声明 views/navigation 不能挂载。
 视图使用既有 list_detail、timeline、approval_diff，不新增平台 slot。
@@ -33,6 +33,7 @@ Framework 当前仅投影 `app_contributions.ui[]`。Persona 的六个视图均�
 | 导航显隐、排序 | App preference owner | 不改变 installed truth；显隐不等于卸载或停用 |
 | Resource Binding | 对应 Provider 与用户 | 显示 refs-only 健康和诊断，不复制凭据或资源正文 |
 | Proposal | Persona | 显示来源、目标与精确变更，调用已声明动作 |
+| 可恢复任务 | Persona 与各步骤的领域负责人 | 展示当前步骤、审核动作和回执，调用精确的任务检查入口 |
 | 邮件、vault、网站写入 | 对应领域 adapter | 保留各自授权和回执，不由 App 直接执行领域写入 |
 
 卸载是用户选择，普通启动、维护和更新不能自动装回；首次 Official Profile 安装或明确
@@ -63,6 +64,11 @@ Framework 判定来源无效时，管理视图保留修复身份但隐藏旧摘�
 `communications.mail.v1#draft.feedback.propose`，把初稿和定稿的引用及版本带入同一个
 笔记差异提案。Studio 通过现有提案视图显示变更和审核动作。写回成功后，由 Persona 的
 学术邮件上下文读取 Framework 接受的新版本。
+
+「可恢复任务」使用同一套列表、详情和动作。用户可打开当前步骤的提案进行审核。
+执行前把已核对的目标窗口带到前台。如果提交结果待核对，视图会提供「核对当前步骤」，
+读回原页面的回执。后续笔记等步骤继续走各自的应用入口，再从同一任务更新进度。
+操作与输入合同见[对外专业工作](external-professional-work.md)。
 
 Obsidian read model 提供当前 notes.write binding；只有一个时可预填 binding_id，不默认
 授权。用户先批准提案，再通过 note.authorize 对精确 proposal/digest/binding 提交独立

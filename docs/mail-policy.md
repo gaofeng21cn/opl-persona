@@ -49,6 +49,13 @@ proposal. `reuse` opens an ordinary note proposal for an existing selected polic
 at its current base hash. A pending proposal never enters drafting context.
 After the owner applies and accepts the revision, later reads use the new body.
 
+The opt-in evaluation, `python3 scripts/evaluate-mail-drafting.py
+--framework-root <Framework checkout>`, runs two fresh Codex sessions with
+independent Persona context reads against a synthetic Profile. It checks that
+the later generated draft follows the accepted correction and that Relay
+prepares it locally. It requires the Codex and Relay launchers. Use `--model`
+or `--relay` to select a specific model or Relay launcher.
+
 Only these role names and lists of unique knowledge IDs are accepted. An empty
 or omitted `identity`, `team`, or `projects` role means that those facts are
 unavailable. Mail triage requires at least one `mail_policy` ID. Source roots,

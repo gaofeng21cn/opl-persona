@@ -41,6 +41,10 @@ Relay 的公开能力包 ABI 读取，不访问其数据库。分诊、捕获和
 说“以后同类邮件沿用”。后者会生成对现有知识笔记的修订提案，审核并写回后在下次起草时生效。
 详见[邮件起草与反馈](docs/mail-policy.md)。
 
+遇到要填表、核对回执，再更新笔记的工作，可以让 Persona 先准备步骤。确认窗口、字段和提交内容后再执行。
+在 Studio 的「可恢复任务」里能找到当前步骤。换到新的 Codex 对话时，用同一个任务编号即可核对中断结果并继续。
+本机填表使用 macOS 辅助功能和 agent-desktop。[可恢复任务的用法](docs/external-professional-work.md)
+
 `context list/select/update`、`people list/update`、`memory list/update/review` 和
 `proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian` 共用 JSON 合同
 （`--input <文件或->`）。并发 CLI 写入共用跨平台锁与 data/persona 内的原子保存。Studio

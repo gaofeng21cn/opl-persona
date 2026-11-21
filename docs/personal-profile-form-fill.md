@@ -3,7 +3,7 @@
 Owner: `opl-persona`
 Purpose: `personal_profile_form_fill_target_design`
 State: `active_target_design`
-Machine boundary: 本文定义 Persona-owned 个人资料引用与表格填写目标边界。当前 Package descriptor、runtime 与 tests 尚未导出 `personal_profile` / `form_fill` Core、`personal-form-fill` Skill、form action、adapter 或 receipt；下文字段合同、CLI、proposal target 与分阶段闭环在对应 owner source/tests 和目标文件或门户 readback 出现前都不是当前可调用行为或完成证明。
+Machine boundary: 本文定义个人资料主源与可复用字段的目标边界。当前已支持的本机填写与回读以[可恢复任务](external-professional-work.md)及其源码为准。
 
 本文件是 OPL Persona 中“个人资料与表格填写（Personal Profile and Form Fill）”
 子域的目标设计权威。它扩展
@@ -16,10 +16,9 @@ Obsidian、邮件、第三方门户或 OPL App 的既有 authority。
 当前 owner descriptor 只导出一个 `opl-persona` Skill，以及 context、memory、Inbox、
 Obsidian、mail 和 website proposal modules。现有 Resource Binding 只为用户选择的
 Obsidian 或普通 Markdown 目录提供 opaque binding 与目录检查；知识身份、版本和读取授权
-使用 Framework 的通用机制。这些能力不等于个人字段 registry、
-表格解析器、form adapter 或提交 route。本文提出的 Core、Skill、action 名和 receipt
-shape 都是后续 owner contract 候选，不得被 App、Framework 或自动化当成已安装、已发布
-或可执行接口。
+使用 Framework 的通用机制。Persona 的可恢复任务支持填写一个已经明确定位的文字字段，
+以及按已审核内容提交并核对回执。字段值、目标和执行窗口由用户审核的步骤确定。
+本文的个人字段目录、文档表格解析和批量映射仍属于目标设计。
 
 ## 目标与结论
 

@@ -1,6 +1,6 @@
 ---
 name: opl-persona
-description: Use OPL Persona to coordinate evidence-backed PI context across OPL Relay, user-selected knowledge sources, and the lab website through reviewable proposals.
+description: Use OPL Persona to coordinate evidence-backed PI context, reviewable proposals and resumable local tasks across mail, knowledge, web and desktop form work.
 ---
 
 # OPL Persona
@@ -60,6 +60,36 @@ does not block independent work.
 Prefer the installed OPL Package contribution command when OPL App exposes it.
 If the Package is not discovered yet, the plugin's own `bin/opl-persona`
 launcher is a self-contained fallback for the same JSON ABI.
+
+## Resumable local tasks
+
+Reuse the mail, knowledge or website owner's direct operation when it covers
+the task. For approved input in a local macOS window, have the user open the
+target application in the correct account. Observe the exact window, page,
+record and control with agent-desktop. Use its accessible identity, and route
+the input through Persona to retain the approval and delivery state.
+
+- `task prepare --input -` takes a stable `task_id`, `title`, and a `plan`
+  containing `source_refs` and ordered `steps`. A step contains `kind`,
+  `title` and `input`. Each `fill` gives a `target`, unique `field`,
+  `before` and `value`. A `submit` gives a `target`, exact `button`,
+  reviewed `fields` map and a distinct `result` target for the receipt.
+  Targets use `app`, `window_id`, `process_instance` and the visible
+  record `marker`. In a portal, provide exact `page_url` and
+  `account_marker`. A linked `proposal` step uses its `proposal_id` and
+  `expected_digest`. Explicitly identify what the user has authorized.
+- Show the current proposal, review it through the existing proposal flow, and
+  run `task run` with `task_id`, the exact `proposal_id`, `expected_digest`
+  and the user's `confirmation` of `confirmed`. Bring the reviewed window
+  to the foreground. Prefer native authorization for secrets and sign-in.
+- In a new conversation, use `task list` or `task inspect` with the same
+  `task_id`. For an attempted step, run `task check`. A returned result
+  requires the original target's visible effect or the linked owner's receipt.
+  If the portal reopens in another window, `task check` accepts the new
+  `window_id` and `process_instance` in a `window` object for readback.
+  Resolve a missing or uncertain external result at the original target before
+  preparing another submission. Use the existing owner flow for linked
+  proposals, then check them from the same task.
 
 ## Proposal workflow
 

@@ -54,17 +54,19 @@
       "runtime/opl_persona/core.py",
       "runtime/opl_persona/inbox.py",
       "runtime/opl_persona/knowledge.py",
+      "runtime/opl_persona/local_tools.py",
       "runtime/opl_persona/obsidian.py",
       "runtime/opl_persona/obsidian_apply.py",
       "runtime/opl_persona/paths.py",
       "runtime/opl_persona/policy.py",
       "runtime/opl_persona/proposals.py",
+      "runtime/opl_persona/tasks.py",
       "runtime/opl_persona/workspace.py",
       "skills/opl-persona/SKILL.md",
       "skills/opl-persona/agents/openai.yaml",
       "runtime/opl_persona/_opl_profile_workspace.py"
     ],
-    "digest": "sha256:4596151b3b1ed006f30ace2919dcc21d6f56ca2b3caa84719ca98a5702a800c4"
+    "digest": "sha256:bad465597355d9a7ad762e18a2a7d9a3364ef87db8504e90e2f5fb2e138b2caa"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
@@ -98,6 +100,15 @@
   "app_contributions": {
     "schema_version": "opl-app-contributions.v1",
     "ui": [
+      {
+        "contribution_id": "persona.tasks.panel",
+        "slot": "settings.section",
+        "contribution_kind": "view",
+        "trust_tier": "declarative",
+        "scope": "root",
+        "view_id": "persona.tasks",
+        "sort_order": 215
+      },
       {
         "contribution_id": "persona.today.panel",
         "slot": "settings.section",
@@ -155,6 +166,12 @@
     ],
     "navigation": [
       {
+        "navigation_id": "persona.tasks",
+        "label_i18n": {"zh-CN": "可恢复任务", "en-US": "Resumable tasks"},
+        "view_id": "persona.tasks",
+        "sort_order": 215
+      },
+      {
         "navigation_id": "persona.today",
         "label_i18n": {
           "zh-CN": "Persona",
@@ -210,6 +227,15 @@
       }
     ],
     "views": [
+      {
+        "view_id": "persona.tasks",
+        "view_type": "list_detail",
+        "title_i18n": {"zh-CN": "可恢复任务", "en-US": "Resumable tasks"},
+        "data_ref": "personal.context.v1#tasks",
+        "command_ids": ["persona.task.prepare", "persona.task.inspect", "persona.task.run", "persona.task.check",
+                        "persona.proposal.inspect", "persona.proposal.approve", "persona.proposal.reject"],
+        "empty_state_i18n": {"zh-CN": "暂无任务", "en-US": "No tasks"}
+      },
       {
         "view_id": "persona.today",
         "view_type": "timeline",
@@ -303,6 +329,10 @@
       }
     ],
     "commands": [
+      {"command_id": "persona.task.prepare", "label_i18n": {"zh-CN": "准备任务", "en-US": "Prepare task"}, "action_ref": "personal.context.v1#task.prepare"},
+      {"command_id": "persona.task.inspect", "label_i18n": {"zh-CN": "查看任务步骤", "en-US": "Inspect task steps"}, "action_ref": "personal.context.v1#task.inspect"},
+      {"command_id": "persona.task.run", "label_i18n": {"zh-CN": "在目标窗口执行", "en-US": "Run in target window"}, "action_ref": "personal.context.v1#task.run", "confirmation_required": true},
+      {"command_id": "persona.task.check", "label_i18n": {"zh-CN": "核对当前步骤", "en-US": "Check current step"}, "action_ref": "personal.context.v1#task.check"},
       {
         "command_id": "persona.context.select",
         "label_i18n": {

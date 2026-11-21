@@ -17,6 +17,7 @@ from .policy import load_markdown_policies
 from .proposals import ProposalStore
 from .workspace import CONTEXT_MODES, WorkspaceStore
 from .bindings import list_resource_bindings
+from .tasks import TaskStore, TASK_ACTIONS, TASK_STATUSES, TASKS_REF
 
 
 ABI_SCHEMA = "opl-package-app-contribution-cli.v1"
@@ -25,6 +26,7 @@ RESPONSE_SCHEMA = "opl-package-app-contribution-response.v1"
 
 
 DATA_CONTRACTS: dict[str, dict[str, Any]] = {
+    TASKS_REF: {"operation": "read", "input": {}, "result": f"{TASKS_REF}.result"},
     "personal.context.v1#today": {
         "operation": "read",
         "input": {},
@@ -62,6 +64,7 @@ DATA_CONTRACTS: dict[str, dict[str, Any]] = {
 }
 
 COLLECTION_STATUSES = {
+    TASKS_REF: ("all", ["all", *TASK_STATUSES]),
     "personal.context.v1#today": ("active", ["active", "staged", "routed", "all"]),
     "personal.context.v1#proposals": ("all", ["all", "pending", "approved", "rejected", "applied"]),
     "personal.context.v1#contexts": ("all", ["all"]),
@@ -152,6 +155,21 @@ ACTION_CONTRACTS: dict[str, dict[str, Any]] = {
         "result": "knowledge.obsidian.v1#note.propose.result",
     },
 }
+
+for _verb, _fields in {
+    "prepare": {"title": "string", "plan": "object"},
+    "inspect": {},
+    "run": {"proposal_id": "string", "expected_digest": "string", "confirmation": "string"},
+    "check": {"window": "object"},
+}.items():
+    _action = TASK_ACTIONS[_verb]
+    ACTION_CONTRACTS[_action] = {
+        "operation": "execute", "confirmation_required": _verb == "run",
+        "input": {name: {"type": field_type, "required": name != "window"}
+                  for name, field_type in {"task_id": "string", **_fields}.items()},
+        "result": f"{_action}.result",
+    }
+ACTION_CONTRACTS[TASK_ACTIONS["run"]]["input"]["confirmation"]["enum"] = ["confirmed"]
 
 ACTION_CONTRACTS.update({
     "personal.context.v1#proposal.reject": {
@@ -313,6 +331,8 @@ def _validate_input(value: dict[str, object], contract: dict[str, Any]) -> None:
 
 
 VIEW_ACTIONS = {
+    TASKS_REF: [*TASK_ACTIONS.values(), "personal.context.v1#proposal.inspect",
+                "personal.context.v1#proposal.approve", "personal.context.v1#proposal.reject"],
     "personal.context.v1#today": [],
     "personal.inbox.v1#recent": ["personal.inbox.v1#capture.propose"],
     "personal.context.v1#contexts": ["personal.context.v1#context.select", "personal.context.v1#context.update"],
@@ -335,6 +355,7 @@ CREATE_DEFAULTS = {
     },
 }
 COLLECTION_ACTIONS = {
+    TASKS_REF: [(TASK_ACTIONS["prepare"], {"zh-CN": "准备任务", "en-US": "Prepare task"})],
     "personal.context.v1#today": [],
     "personal.context.v1#contexts": [],
     "personal.memory.v1#people": [
@@ -438,6 +459,26 @@ def _proposal_row(item: dict[str, Any], bindings: list[dict[str, Any]], store: P
     return item | {"actions": actions, "preview": store.preview(item)}
 
 
+def _task_row(item, tasks):
+    identity = {"task_id": item["id"]}
+    actions = [_row_action(TASK_ACTIONS["inspect"], identity)]
+    step = item["current_step"]
+    if step:
+        proposal = step["proposal"]
+        actions.append(_row_action("personal.context.v1#proposal.inspect", {"proposal_id": proposal["proposal_id"]}))
+        if step["kind"] == "proposal" or step["state"] == "attempted":
+            actions.append(_row_action(TASK_ACTIONS["check"], identity))
+        else:
+            linked = tasks.proposals.inspect(proposal["proposal_id"])
+            if linked["proposal_digest"] == proposal["expected_digest"]:
+                if linked["status"] == "pending":
+                    actions += [_row_action(f"personal.context.v1#proposal.{verb}", proposal)
+                                for verb in ("approve", "reject")]
+                elif linked["status"] == "approved":
+                    actions.append(_row_action(TASK_ACTIONS["run"], identity | proposal))
+    return item | {"actions": actions}
+
+
 def _relay_projection(evidence: dict[str, Any], collection: str) -> list[dict[str, Any]]:
     projected = []
     for raw in evidence["items"]:
@@ -467,6 +508,12 @@ def _relay_projection(evidence: dict[str, Any], collection: str) -> list[dict[st
 def _workspace_read(ref: str, contract: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
     store = WorkspaceStore()
     data: dict[str, Any] = {}
+    if ref == TASKS_REF:
+        tasks = TaskStore(store.paths)
+        data = _collection_data(ref, tasks.list(), value)
+        data["items"] = [_task_row(item, tasks) for item in data["items"]]
+        return {"kind": "data", "state": "ready", "result_schema": contract["result"],
+                "input_schema": contract["input"], "data": data}
     if ref == "personal.context.v1#proposals":
         try:
             bindings = [{"binding_id": identifier, **binding.to_dict()} for identifier, binding in
@@ -566,6 +613,13 @@ def _inbox_read(ref: str, contract: dict[str, Any], value: dict[str, Any], *, ac
 
 
 def _execute(ref: str, contract: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
+    task_action = next((verb for verb, action_ref in TASK_ACTIONS.items() if ref == action_ref), None)
+    if task_action:
+        tasks = TaskStore()
+        item = getattr(tasks, task_action)(**value)
+        return {"kind": "action", "status": item["status"], "item": _task_row(item, tasks),
+                "confirmation_required": contract["confirmation_required"], "result_schema": contract["result"],
+                "execution_policy": "approved_local_tool" if task_action == "run" else "persona_task_state"}
     if ref == "communications.mail.v1#draft.feedback.propose":
         proposals = ProposalStore()
         bundle = build_mail_feedback_proposal(value, proposals.paths)

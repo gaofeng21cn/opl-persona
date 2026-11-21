@@ -17,6 +17,7 @@ from .core import (
 )
 from .paths import PersonaPaths
 from .proposals import ProposalStore
+from .tasks import TASK_ACTIONS, TASKS_REF
 from .workspace import WorkspaceStore, workspace_lock
 from .obsidian import memo_proposals_from_file
 from .bindings import (
@@ -28,6 +29,8 @@ from .bindings import (
 
 
 WORKSPACE_COMMANDS = {
+    "task": {"list": ("read", TASKS_REF),
+             **{verb: ("execute", ref) for verb, ref in TASK_ACTIONS.items()}},
     "context": {"list": ("read", "personal.context.v1#contexts"),
                 "select": ("execute", "personal.context.v1#context.select"),
                 "update": ("execute", "personal.context.v1#context.update")},
@@ -105,7 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     for action in WORKSPACE_COMMANDS["proposal"]:
         command = proposal_sub.add_parser(action)
         command.add_argument("--input", required=action != "list", help="JSON file or - for stdin")
-    for group in ("context", "people", "memory"):
+    for group in ("context", "people", "memory", "task"):
         group_parser = sub.add_parser(group)
         actions = group_parser.add_subparsers(dest="workspace_action", required=True)
         for action in WORKSPACE_COMMANDS[group]:
