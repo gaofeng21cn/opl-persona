@@ -70,6 +70,8 @@ Have the user sign in to that private browser when needed. Use
 `browser inspect --session <name>` to find the active tab, accessible controls
 and visible account and record. Distinct sessions have their own Chromium
 profiles and run concurrently. Close a session through `browser close`.
+When the user has authorized a connection to their current Chrome, use
+`browser open --shared` to create a dedicated tab that reuses its sign-in.
 For a local macOS window, observe the exact frontmost window and controls
 with agent-desktop. Keep the approved input and the result in the Persona task.
 
@@ -83,6 +85,20 @@ with agent-desktop. Keep the approved input and the result in the Persona task.
   `window_id`, `process_instance` and `marker`, plus `page_url` and
   `account_marker` for portals. A linked `proposal` step uses its `proposal_id` and
   `expected_digest`. Explicitly identify what the user has authorized.
+- Use `kind: tool` with `input: {provider, action, arguments}` for other
+  operations. For a visual click or drag, put the exact window in front and
+  use `tool capture-window --input -` with the target object. Review the image
+  and use its digest as `before`. Provide `at: [x, y]` and, for a drag,
+  `to: [x, y]` in image pixels. Use the `agent-desktop` provider. After
+  dispatch, inspect the `pending_readback` image. With user confirmation of
+  the visible result, call `task check` with `review` containing the observed
+  `digest`, original `operation_id`, and `confirmation: "confirmed"`.
+- For a GitHub issue label, read `tool github-issue --repo <owner/name> --number <number>`.
+  Use provider `github` and action `issue.label.add` with the issue identity,
+  account, expected revision and exact label. For installed external
+  connectors, read `tool connector --package-id <id>`; use provider
+  `opl-package` and action `execute` with `package_id`, `operation`,
+  `target_ref`, reviewed `expected_revision` and `input`.
 - Show the current proposal, review it through the existing proposal flow, and
   run `task run` with `task_id`, the exact `proposal_id`, `expected_digest`
   and the user's `confirmation` of `confirmed`. Bring a reviewed native

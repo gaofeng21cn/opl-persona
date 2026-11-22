@@ -12,21 +12,25 @@ Machine boundary: 可恢复任务提供当前的本机操作入口。站点专�
 
 ## 当前实现边界
 
-Persona 可在已登录的目标网页或 macOS 窗口填写经审核的文字字段、提交指定表单并回读结果。
-一个任务可依序串联这些操作及已有的笔记提案。Studio 的「可恢复任务」与 Codex 的任务命令
-共用同一份记录。邮件、笔记或网站有专用接口时优先使用该接口。
+Persona 可以在已登录的网页填表，在 macOS 窗口点击或拖动，也可以调用支持操作回执的连接器。
+一个任务可串联这些操作和已有的笔记提案。Studio 的「可恢复任务」与 Codex 共用任务记录。
+邮件、笔记和网站的专用接口负责各自的业务数据。
 
 1. 由用户登录目标系统并打开记录。网页表单使用 agent-browser 0.42 或更新版本。
    通过 `opl-persona browser open --session <名称> --url <网址>` 打开独立浏览器，在其中登录。
    用 `opl-persona browser inspect --session <名称>` 读取当前网址、标签页 ID 和可访问内容。
    各会话的账号状态存于个人工作区的 `data/persona/browser/` 下，可以并行处理。
    用 `opl-persona browser close --session <名称>` 关闭本次会话，已保存的登录状态留在原资料目录。
+   如果需要复用登录状态，先在 Chrome 允许本机调试连接，再给 `browser open` 加 `--shared`。
+   有明确获准的本机 Chrome 调试端口时可以加 `--chrome-port <端口>`。每个会话自己开一个标签页，
+   与 Chrome 原有标签页共用登录状态。关闭 Persona 会话时，只关闭该会话的标签页。
    对于原生窗口，用 `agent-desktop list-windows` 取得窗口和进程身份，再用 `snapshot` 核对控件和记录。
 2. 用 `opl-persona task prepare --input -` 准备任务。输入包含 `task_id`、`title`，
    以及 `plan.source_refs` 和有序的 `plan.steps`。每一步含 `kind`、`title`、`input`。
    - `fill` 接受 `target`、唯一文字字段的名称 `field`、之前的值 `before` 和拟填写的 `value`。
    - `submit` 接受 `target`、按钮名称 `button`、表单的已审字段和值 `fields`，以及回执目标 `result`。
    - `proposal` 通过 `proposal_id` 与 `expected_digest` 引用现有提案。使用其负责人原有的审核和应用入口。
+   - `tool` 的 `input` 包含 `provider`、`action` 与 `arguments`。下节列出图形操作和连接器所需输入。
    - 浏览器的 `target` 包含 `browser_session`、`tab_id`、`page_url`、可见记录标识 `marker`
      和可见账号标识 `account_marker`。原生窗口使用 `app`、`window_id`、`process_instance`
      和 `marker`。原生窗口中的门户同样需要精确网址与账号。
@@ -39,7 +43,23 @@ Persona 可在已登录的目标网页或 macOS 窗口填写经审核的文字�
    `task check`。它检查原操作结果并保存回执。门户窗口重开后可以传入新的
    `window: {window_id, process_instance}`。独立浏览器可在同一会话打开原回执页后传入新的
    `tab_id`。两种方式都核对原网址、账号和回执标识。
-   本会话有已派发且待核对的步骤时，先查原结果再执行新动作。其他独立浏览器会话可以继续工作。
+   已派发且待核对的步骤会暂缓同一工具通道内的新写入。其他工具通道可以继续工作。
+
+### 图形窗口和连接器
+
+- 对于画布、拖拽等图形操作，先把窗口切到前台，用 `opl-persona tool capture-window --input -`
+  读取目标窗口的图像、尺寸和摘要。输入是和原生表单相同的 `target` 对象。
+  使用 `agent-desktop` 的 `click` 或 `drag` 动作，提供 `target`、审核图像的摘要 `before`，
+  以及相对图像左上角的像素坐标 `at: [x, y]`。拖拽另需 `to: [x, y]`。
+  结果图像显示在任务的 `pending_readback`。看过结果后，在 `task check` 的 `review` 对象提供
+  原 `operation_id`、结果图像的 `digest` 和 `confirmation: "confirmed"` 完成核验。
+- GitHub Issue 加标签使用现有 `gh` 登录。`opl-persona tool github-issue --repo <仓库> --number <编号>`
+  读取账号、Issue ID、状态和标签版本。把 `repo`、`number`、`account`、`issue_id`、
+  `expected_revision` 和 `label` 交给 `github` 的 `issue.label.add` 动作。执行后回读 Issue 标签。
+- 其他服务可以安装支持工具执行合同的独立 Package。`opl-persona tool connector --package-id <ID>`
+  查看它的操作目录。`opl-package` 的 `execute` 动作接收 `package_id`、`operation`、
+  `target_ref`、`expected_revision` 和业务 `input`。已有凭据和业务回执由连接器维护。
+  [连接器合同及接入说明](architecture.md#connector-package-contract)
 
 下面的站点档案和专用接口仍属于后续设计。已实装的任务使用 `personal.context.v1#task.*`。
 

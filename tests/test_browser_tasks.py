@@ -9,14 +9,14 @@ from pathlib import Path
 import subprocess
 import sys
 from threading import Thread
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from opl_persona.browser_tools import Browser
-from opl_persona.local_tools import ToolPaused, normalize_action
 from opl_persona.paths import PersonaPaths
 from opl_persona.tasks import TaskStore
+from opl_persona.tools.browser import Browser
+from opl_persona.tools.contract import ToolPaused, normalize_browser_target, normalize_form
 
 
 def target(tab, record, account):
@@ -44,8 +44,8 @@ def test_browser_plan_rejects_receipt_from_a_different_session_tab_or_origin():
     receipt = reviewed | {"marker": "Receipt A", "page_url": "https://portal.example.test/receipt"}
     for change in ({"browser_session": "other"}, {"tab_id": "B" * 32}, {"page_url": "https://other.example.test/receipt"}):
         with pytest.raises(ValueError, match="must stay"):
-            normalize_action("submit", {"target": reviewed, "button": "Submit", "fields": {"Title": "A"},
-                                       "result": receipt | change})
+            normalize_form("submit", {"target": reviewed, "button": "Submit", "fields": {"Title": "A"},
+                                      "result": receipt | change}, normalize_browser_target)
 
 
 def test_browser_session_input_ownership_is_per_session_and_profile(tmp_path, monkeypatch):
@@ -162,8 +162,10 @@ def test_parallel_chromium_tasks_keep_accounts_and_reconcile_a_crash(monkeypatch
 import json
 import os
 import sys
-from opl_persona.browser_tools import Browser
+from opl_persona.paths import PersonaPaths
 from opl_persona.tasks import TaskStore
+from opl_persona.tool_registry import ToolRegistry
+from opl_persona.tools.browser import Browser
 
 class InterruptedBrowser(Browser):
     def dispatch(self, *args):
@@ -171,7 +173,8 @@ class InterruptedBrowser(Browser):
             os._exit(84)
         return False
 
-TaskStore(browser=InterruptedBrowser).run(**json.load(sys.stdin))
+paths = PersonaPaths.resolve()
+TaskStore(paths, tools=ToolRegistry(paths, browser=InterruptedBrowser)).run(**json.load(sys.stdin))
 """
         result = subprocess.run([sys.executable, "-c", child], input=json.dumps(submit_a), text=True,
                                 env=os.environ | {"PYTHONPATH": str(runtime)}, check=False, timeout=30)
@@ -198,6 +201,47 @@ TaskStore(browser=InterruptedBrowser).run(**json.load(sys.stdin))
         assert submissions == {"A": [["Reviewed title A"]], "B": [["Reviewed title B"]]}
     finally:
         for browser in browsers:
+            try:
+                browser.close()
+            except ToolPaused:
+                pass
+
+
+@pytest.mark.skipif(os.environ.get("OPL_PERSONA_TEST_BROWSER") != "1",
+                    reason="Opt in with agent-browser 0.42+ and Chromium installed")
+def test_shared_chrome_pins_two_tabs_without_taking_original(monkeypatch, tmp_path, portal):
+    url, _ = portal
+    monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
+    store = TaskStore()
+    original, first, second = (Browser(store.paths, name) for name in ("original", "seat-one", "seat-two"))
+    try:
+        initial = original.open(f"{url}/login/A", headless=True)
+        connection = original._run("get", "cdp-url")
+        port = urlsplit(connection.get("cdpUrl") or connection["url"]).port
+        tabs = [driver.open(f"{url}/form/{record}", shared=True, chrome_port=port)
+                for driver, record in ((first, "A"), (second, "B"))]
+        assert len({view["tab_id"] for view in [initial, *tabs]}) == 3
+        assert all("Signed in as staff-A" in view["snapshot"] for view in tabs)
+        arguments = []
+        for record, view in zip(("A", "B"), tabs):
+            item = prepare(store, f"shared-{record}", ("fill", {
+                "target": target(view, record, "staff-A"), "field": "Title", "before": "", "value": f"Seat {record}",
+            }))
+            arguments.append(approve(store, item))
+        with ThreadPoolExecutor(2) as pool:
+            results = list(pool.map(lambda args: store.run(**args), arguments))
+        assert all(item["status"] == "complete" for item in results)
+        original_tab = next(tab for tab in original._run("tab", "list")["tabs"] if tab["targetId"] == initial["tab_id"])
+        assert original_tab["url"] == initial["page_url"]
+        original._run("tab", initial["tab_id"])
+        assert "Seat A" not in original.inspect()["snapshot"]
+        first.close()
+        survivors = {tab["targetId"] for tab in original._run("tab", "list")["tabs"]}
+        assert initial["tab_id"] in survivors and tabs[1]["tab_id"] in survivors
+        assert tabs[0]["tab_id"] not in survivors
+        assert second.inspect()["tab_id"] == tabs[1]["tab_id"]
+    finally:
+        for browser in (first, second, original):
             try:
                 browser.close()
             except ToolPaused:

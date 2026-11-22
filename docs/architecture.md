@@ -320,35 +320,77 @@ reachability only. The same note writer accepts both selected directory provider
 values are `healthy`, `degraded`, `unavailable`, or `unknown`. A stored health
 observation must not be used as a fresh authorization or content readback.
 
-## Resumable local tasks
+## Resumable tasks and tool providers
 
 `personal.context.v1#tasks` projects task progress and currently available actions.
 `task.prepare` stores an ordered plan and links existing proposals or prepares
-field and submission proposals. Review uses the existing digest-bound proposal
-flow. `task.run` executes the exact reviewed current local action.
+tool proposals. Review uses the existing digest-bound proposal
+flow. `task.run` dispatches the exact reviewed current action.
 `task.check` reads either the reviewed target or the linked owner's receipt and
 advances the same task once the result is visible.
 
-Persona persists a dispatch marker before calling either tool. A restarted
+Persona persists an operation ID and dispatch marker before calling a tool. A restarted
 executor can only check a dispatched step. A confirmed non-delivery permits
-another reviewed attempt. A per-task process lock serializes state changes.
+another approved attempt using the same ID. Each provider defines the input lane
+that must wait for an uncertain result. Other lanes can continue working.
 
-The agent-desktop adapter uses one input lock across profiles. It checks the
-macOS console, the visible window and process, and the live document URL and
-signed-in account for portal work. The agent-browser adapter gives each
-session a private Chromium profile and input lock. A pending result pauses new
-input in that session while other sessions can run. The browser adapter checks
-the pinned tab identifier, exact URL, and visible account and record before
-input. Both adapters resolve controls by accessible
-identity and verify the effect through the original authority. Task receipts
-record the provider and the observed target digest.
+The task engine calls `tool_registry.py`. The registry assembles the built-in
+providers under `tools/`. Each provider depends on the tool contract and
+shared storage primitives. Browser, desktop, GitHub, and Package providers
+have separate files and tests enforce their import boundaries. Existing
+form steps keep their stored input shape. New tool steps use
+`kind: tool` and `input: {provider, action, arguments}`.
+
+```mermaid
+flowchart LR
+    A["Codex / Studio"] --> T["Persona task and approval"]
+    T --> R["Tool registry"]
+    R --> B["Browser provider"]
+    R --> D["Desktop provider"]
+    R --> G["GitHub provider"]
+    R --> P["Package provider"]
+    P --> F["Framework contribution broker"]
+    F --> X["Installed connector Package"]
+```
+
+The desktop provider serializes foreground input across profiles. Visual
+input binds the reviewed window image, the window and process, and points
+in the image. The result image stays in the Profile for human review.
+The browser provider pins each session to its own tab and checks the exact
+page, signed-in account and record. A session uses either a private Chromium
+profile or a dedicated tab in the user's authorized Chrome. In shared Chrome
+the tabs share the Chrome profile's sign-in state.
+
+### Connector Package contract
+
+Install a connector using the usual OPL Package lifecycle. The connector
+declares the read contributions `tool.execution.v1#operations`, `#preflight`,
+and `#receipt`, and the confirmation-required action `tool.execution.v1#execute`.
+Persona uses the Framework contribution CLI with JSON on stdin. The connector
+owns its domain validation, authentication, write, and receipt. Persona checks
+the Framework envelope and matching Package, contribution, and operation identity.
+
+| Contribution | Input | Data returned within the contribution result |
+| --- | --- | --- |
+| `#operations` | Empty object | `schema_version: opl-tool-operations.v1` and an `operations` list with an `id` per operation |
+| `#preflight` | Operation identity and reviewed `input` | `ready`, `stale` or `applied` |
+| `#execute` | Operation identity and reviewed `input` | `applied`, `pending` or `not_delivered` |
+| `#receipt` | Operation identity | `applied` with `receipt_ref`, `pending` or `not_delivered` |
+
+Operation identity contains `operation_id`, `operation`, `target_ref`, and
+`expected_revision`. Each operation response echoes those fields and returns
+`schema_version: opl-tool-operation.v1` and its `state`. Reads return
+`{kind: "data", state: "ready", data: ...}`. Execute returns
+`{kind: "action", data: ...}`. The connector verifies the reviewed resource
+revision at dispatch, records the ID against the external operation, and
+retrieves the original result during receipt reads. Use `not_delivered` only
+when the owner can prove the operation had no effect.
 
 The separate browser input lanes and readback after uncertain delivery follow
 the execution pattern documented by [Linger](https://github.com/simplexai-labs/linger/blob/2f03b64f56f1e7a116d5b19f20a1f3a5fe07b63c/docs/architecture.md#inside-cua-playwright-and-shell).
 
-The workflow links reviewed browser or desktop text entry and form submission to
-other app proposals whose owners already expose an applied receipt. The
-supported input and recovery paths live in
+The operating steps, including GitHub labels through the existing `gh`
+login and source owner proposals, live in
 [External Professional Work](external-professional-work.md). Bulk field mapping
 and reusable personal profile fields remain a separate design in
 [Personal Profile and Form Fill](personal-profile-form-fill.md).

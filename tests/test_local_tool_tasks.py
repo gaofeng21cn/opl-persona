@@ -8,9 +8,11 @@ import pytest
 
 from opl_persona.bindings import set_resource_binding
 from opl_persona.core import build_obsidian_note_proposals
-from opl_persona.local_tools import Desktop, ToolPaused, normalize_action
 from opl_persona.paths import PersonaPaths
 from opl_persona.tasks import TaskStore
+from opl_persona.tool_registry import ToolRegistry
+from opl_persona.tools.contract import ToolPaused, normalize_desktop_target, normalize_form
+from opl_persona.tools.desktop import Desktop
 
 
 TARGET = {"app": "Test Browser", "window_id": "w-1", "process_instance": "test-process",
@@ -49,7 +51,7 @@ def test_changed_window_or_missing_approval_leaves_the_step_ready(profile):
         def preflight(self, *args):
             raise ToolPaused("The selected window moved to the background")
 
-    store = TaskStore(profile, desktop=Background, input_lane=nullcontext)
+    store = TaskStore(profile, tools=ToolRegistry(profile, desktop=Background, input_lane=nullcontext))
     item = prepare(store, FILL)
     with pytest.raises(ValueError, match="approve"):
         store.run(task_id=item["id"], confirmation="confirmed", **item["current_step"]["proposal"])
@@ -63,7 +65,7 @@ def test_interrupted_submit_resumes_same_proposal_and_projects_owner_receipt(pro
     root.mkdir()
     set_resource_binding(profile.workspace, binding_id="notes", capability_id="knowledge.obsidian.v1",
                          provider_id="obsidian", resource_ref=root.as_uri(), scopes=["notes.read", "notes.write"])
-    store = TaskStore(profile, input_lane=nullcontext)
+    store = TaskStore(profile)
     note = store.proposals.persist_bundle(build_obsidian_note_proposals({
         "operation": "create", "target_path": "application.md", "expected_digest": "absent",
         "frontmatter": {}, "body": "The conference system issued receipt 41.", "tags": [], "links": [],
@@ -80,7 +82,9 @@ import json
 import os
 from contextlib import nullcontext
 from pathlib import Path
+from opl_persona.paths import PersonaPaths
 from opl_persona.tasks import TaskStore
+from opl_persona.tool_registry import ToolRegistry
 
 class Portal:
     def preflight(self, *args):
@@ -89,7 +93,8 @@ class Portal:
         with Path(os.environ['PERSONA_TEST_PORTAL']).open('x') as handle:
             handle.write('receipt-41')
         os._exit(84)
-TaskStore(desktop=Portal, input_lane=nullcontext).run(**json.loads(os.environ['PERSONA_TEST_ARGS']))
+paths = PersonaPaths.resolve()
+TaskStore(paths, tools=ToolRegistry(paths, desktop=Portal, input_lane=nullcontext)).run(**json.loads(os.environ['PERSONA_TEST_ARGS']))
 """
     runtime = str(__import__("opl_persona").__path__[0] + "/..")
     result = subprocess.run([sys.executable, "-c", adapter], check=False, env={
@@ -103,7 +108,7 @@ TaskStore(desktop=Portal, input_lane=nullcontext).run(**json.loads(os.environ['P
             assert kind == "submit" and payload["result"]["marker"] == "Receipt for form 41"
             return portal.read_text() == "receipt-41"
 
-    restarted = TaskStore(profile, desktop=NewExecutor, input_lane=nullcontext)
+    restarted = TaskStore(profile, tools=ToolRegistry(profile, desktop=NewExecutor, input_lane=nullcontext))
     paused = restarted.inspect(task_id=item["id"])
     assert paused["status"] == "needs-check"
     assert paused["current_step"]["proposal"] == item["current_step"]["proposal"]
@@ -124,9 +129,9 @@ TaskStore(desktop=Portal, input_lane=nullcontext).run(**json.loads(os.environ['P
 
 def test_submit_rejects_cross_origin_readback_and_a_changed_field(monkeypatch):
     with pytest.raises(ValueError, match="approved origin"):
-        normalize_action("submit", SUBMIT["input"] | {
+        normalize_form("submit", SUBMIT["input"] | {
             "result": SUBMIT["input"]["result"] | {"page_url": "https://other.example.test/receipt/41"},
-        })
+        }, normalize_desktop_target)
     desktop = Desktop.__new__(Desktop)
     monkeypatch.setattr(desktop, "observe", lambda *args, **kwargs: [
         {"role": "textfield", "name": "Title", "value": "An independent edit", "ref_id": "@s0:e1"},

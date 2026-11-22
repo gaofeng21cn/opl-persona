@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import subprocess
-import tempfile
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -17,6 +16,7 @@ from typing import Any, Iterator
 
 from .paths import PersonaPaths
 from .knowledge import source_dependencies, verify_knowledge_dependencies
+from .primitives import atomic_json, item_digest, text
 
 
 WORKSPACE_SCHEMA = "opl-persona-workspace.v2"
@@ -62,12 +62,6 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def text(value: object, name: str, limit: int = 4096) -> str:
-    if not isinstance(value, str) or not value.strip() or len(value) > limit:
-        raise ValueError(f"{name} must be a non-empty string of at most {limit} characters")
-    return value.strip()
-
-
 def refs(value: object, name: str = "source_refs", *, required: bool = True) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
         raise ValueError(f"{name} must be a list of non-empty strings")
@@ -75,12 +69,6 @@ def refs(value: object, name: str = "source_refs", *, required: bool = True) -> 
     if required and not result:
         raise ValueError(f"{name} must contain at least one reference")
     return result
-
-
-def item_digest(value: dict[str, Any]) -> str:
-    material = {key: item for key, item in value.items() if key not in {"digest", "actions"}}
-    encoded = json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @contextmanager
@@ -117,27 +105,6 @@ def workspace_lock(paths: PersonaPaths) -> Iterator[None]:
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-def atomic_json(path: Path, value: dict[str, Any]) -> None:
-    encoded = (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=".persona-", dir=path.parent)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        if os.name != "nt":
-            directory_fd = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
 
 
 def current_relay_memory(item: object) -> bool:
