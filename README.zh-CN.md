@@ -43,8 +43,9 @@ Relay 的公开能力包 ABI 读取，不访问其数据库。分诊、捕获和
 
 遇到要填表、核对回执，再更新笔记的工作，可以让 Persona 先准备步骤。确认目标页面或窗口、字段和提交内容后再执行。
 在 Studio 的「可恢复任务」里能找到当前步骤。换到新的 Codex 对话时，用同一个任务编号即可核对中断结果并继续。
-网页表单可以在独立浏览器会话中处理。本机窗口使用 macOS 辅助功能和 agent-desktop。
-[可恢复任务的用法](docs/external-professional-work.md)
+网页表单可以使用独立浏览器，也可以复用已登录 Chrome 的专用标签页。Persona 还支持审核窗口内的
+点击和拖拽、为 GitHub Issue 添加标签，以及通过可独立安装的连接器调用其他服务。
+[工具配置和任务恢复](docs/external-professional-work.md)
 
 `context list/select/update`、`people list/update`、`memory list/update/review` 和
 `proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian` 共用 JSON 合同

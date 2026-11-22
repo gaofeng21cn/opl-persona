@@ -11,8 +11,8 @@ import subprocess
 import sys
 from contextlib import contextmanager
 
-from .local_tools import ToolPaused, _page_identity, browser_session_name, browser_tab_id
-from .workspace import atomic_json
+from .contract import ToolPaused, browser_session_name, browser_tab_id, exclusive_lane, page_identity
+from ..primitives import atomic_json
 
 
 class Browser:
@@ -23,6 +23,8 @@ class Browser:
         self.session = session
         self.root = paths.data_root / "browser" / session
         self.config = self.root / "config.json"
+        self.connection_path = self.root / "connection.json"
+        self.connection = None
         namespace = hashlib.sha256(os.fsencode(paths.workspace.resolve())).hexdigest()[:16]
         # Keep the generated socket pathname short on macOS.
         private_session = hashlib.sha256(session.encode()).hexdigest()[:16]
@@ -42,23 +44,48 @@ class Browser:
 
     @contextmanager
     def lane(self, *, create=False):
-        if os.name != "posix":
-            raise ToolPaused("Persona browser sessions require a POSIX host")
-        import fcntl
-
         if create:
             self.root.mkdir(parents=True, mode=0o700, exist_ok=True)
         if not self.root.is_dir():
             raise ToolPaused("Open this Persona browser session first")
-        fd = os.open(self.root / "input.lock", os.O_NOFOLLOW | os.O_WRONLY | os.O_CREAT, 0o600)
-        with os.fdopen(fd, "ab") as handle:
+        with exclusive_lane(self.root / "input.lock", "This browser session already has an active Persona operation"):
             try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as exc:
-                raise ToolPaused("This browser session already has an active Persona operation") from exc
+                self.connection = self._load_connection()
+            except (OSError, TypeError, KeyError, ValueError) as exc:
+                raise ToolPaused("This shared Chrome session has invalid connection state") from exc
             if create and not self.config.exists():
                 atomic_json(self.config, {})
             yield
+
+    def _load_connection(self):
+        if not self.connection_path.is_file():
+            return None
+        value = json.loads(self.connection_path.read_text(encoding="utf-8"))
+        if value["mode"] != "shared":
+            raise ValueError("Unknown browser connection mode")
+        port = value["port"]
+        if port is not None and (type(port) is not int or not 1 <= port <= 65535):
+            raise ValueError("Invalid local Chrome port")
+        if value["tab_id"] is not None:
+            browser_tab_id(value["tab_id"])
+        return value
+
+    def _set_connection(self, port, tab_id):
+        connection = {"mode": "shared", "port": port, "tab_id": tab_id}
+        atomic_json(self.connection_path, connection)
+        self.connection = connection
+
+    def _environment(self):
+        if not self.connection:
+            return self.env
+        env = {key: value for key, value in self.env.items() if key not in {
+            "AGENT_BROWSER_PROFILE", "AGENT_BROWSER_ARGS", "AGENT_BROWSER_NO_WEBMCP",
+        }}
+        if self.connection["port"] is None:
+            env["AGENT_BROWSER_AUTO_CONNECT"] = "1"
+        else:
+            env["AGENT_BROWSER_CDP"] = str(self.connection["port"])
+        return env
 
     def _run(self, *args, stdin=None, mcp=False):
         try:
@@ -66,7 +93,7 @@ class Browser:
                 self.binary, "--json", "--config", str(self.config), *args,
             ]
             result = subprocess.run(argv, input=stdin, text=True, encoding="utf-8", capture_output=True,
-                                    cwd=self.root, env=self.env, timeout=18, check=False)
+                                    cwd=self.root, env=self._environment(), timeout=18, check=False)
             response = json.loads(result.stdout)
             if mcp:
                 response = response["structuredContent"]["response"]
@@ -77,8 +104,12 @@ class Browser:
             # Upstream diagnostics may contain page contents or values.
             raise ToolPaused("agent-browser could not verify the browser operation. Check the original session.") from exc
 
-    def open(self, url, *, headless=False):
-        _page_identity(url)
+    def open(self, url, *, headless=False, shared=False, chrome_port=None):
+        page_identity(url)
+        if chrome_port is not None and (not shared or type(chrome_port) is not int or not 1 <= chrome_port <= 65535):
+            raise ValueError("Use an approved local Chrome port in shared mode")
+        if shared and headless:
+            raise ValueError("Shared Chrome uses the existing browser without relaunching it")
         try:
             result = subprocess.run([self.binary, "--version"], capture_output=True, text=True,
                                     env=self.env, timeout=5, check=True)
@@ -88,8 +119,41 @@ class Browser:
         if not version or tuple(map(int, version.groups())) < (0, 42):
             raise ToolPaused("Use agent-browser 0.42 or newer for pinned tabs and stdin form input")
         with self.lane(create=True):
+            if shared:
+                with exclusive_lane(self.root.parent / "shared-connect.lock",
+                                    "Finish opening the other shared Chrome tab first"):
+                    return self._open_shared(url, chrome_port)
+            if self.connection:
+                raise ToolPaused("Open this session in shared Chrome or choose a different session name")
             self._run("--headed", "false" if headless else "true", "open", url)
             return self._snapshot()
+
+    def _open_shared(self, url, port):
+        if not self.connection:
+            if (self.root / "chrome").exists():
+                raise ToolPaused("Choose a new session name for shared Chrome")
+            self._set_connection(port, None)
+        elif port is not None and port != self.connection["port"]:
+            raise ToolPaused("Choose a new session name for this Chrome endpoint")
+        pinned = self.connection["tab_id"]
+        if pinned and self._run("session", "info").get("active") is True:
+            tabs = self._run("tab", "list")["tabs"]
+            tab = next((entry for entry in tabs if entry["targetId"] == pinned), None)
+            if tab is not None and tab.get("active") is not True:
+                raise ToolPaused("Bring back the tab reserved for this shared Chrome session")
+            result = self._run("open", url) if tab is not None else self._run("tab", "new", url)
+        elif pinned:
+            # Recover a pinned tab using agent-browser's persisted CDP binding.
+            # Closing a tab externally can leave a dead pin until the user closes the session.
+            result = self._run("open", url)
+            if result.get("targetId") != pinned:
+                raise ToolPaused("Shared Chrome did not restore the reserved tab")
+        else:
+            # In shared mode --pin-tab creates a fresh seat on first attach.
+            result = self._run("open", url)
+        tab_id = browser_tab_id(result.get("targetId"))
+        self._set_connection(self.connection["port"], tab_id)
+        return self._snapshot()
 
     def inspect(self):
         with self.lane():
@@ -97,6 +161,15 @@ class Browser:
 
     def close(self):
         with self.lane():
+            if self.connection:
+                pinned = self.connection["tab_id"]
+                if pinned:
+                    # The exact Persona-owned CDP target is the only tab eligible for close.
+                    if any(tab["targetId"] == pinned for tab in self._run("tab", "list")["tabs"]):
+                        self._run("tab", "close", pinned)
+                self._run("close")
+                self._set_connection(self.connection["port"], None)
+                return
             self._run("close")
 
     def _active_tab(self):
@@ -106,13 +179,16 @@ class Browser:
         active = [tab for tab in tabs if tab.get("active") is True and tab.get("type") == "page"]
         if len(active) != 1:
             raise ToolPaused("Open the reviewed tab in this Persona browser session")
-        return {"browser_session": self.session, "tab_id": browser_tab_id(active[0].get("targetId")),
+        tab_id = browser_tab_id(active[0].get("targetId"))
+        if self.connection and tab_id != self.connection["tab_id"]:
+            raise ToolPaused("The active tab differs from the tab reserved in shared Chrome")
+        return {"browser_session": self.session, "tab_id": tab_id,
                 "page_url": active[0]["url"]}
 
     @staticmethod
     def _matches(actual, expected):
         try:
-            return _page_identity(actual) == _page_identity(expected)
+            return page_identity(actual) == page_identity(expected)
         except (AttributeError, TypeError, ValueError):
             return False
 

@@ -2,102 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import os
 import plistlib
 import re
 import shutil
 import subprocess
+import struct
 import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlsplit
-
-from .workspace import text
-
-
-class ToolPaused(RuntimeError):
-    """The target needs attention before a local operation can proceed."""
-
-
-def strict_object(value, *, required, optional=()):
-    if not isinstance(value, dict) or set(required) - value.keys() or value.keys() - set(required) - set(optional):
-        raise ValueError("expected fields: " + ", ".join(required) + (", optional: " + ", ".join(optional) if optional else ""))
-    return value
-
-
-def _page_identity(value):
-    url = urlsplit(value)
-    if (url.scheme not in {"https", "http"} or not url.hostname or url.username is not None
-            or url.password is not None or (url.scheme == "http" and url.hostname not in {"localhost", "127.0.0.1", "::1"})):
-        raise ValueError("portal page must be an HTTPS URL or a loopback test URL, without credentials")
-    return (url.scheme, url.hostname, url.port or (443 if url.scheme == "https" else 80),
-            url.path or "/", url.query, url.fragment)
-
-
-def normalize_target(value):
-    if isinstance(value, dict) and "browser_session" in value:
-        value = strict_object(value, required=("browser_session", "tab_id", "page_url", "marker", "account_marker"))
-        target = {key: text(item, key, 2048) for key, item in value.items()}
-        browser_session_name(target["browser_session"])
-        browser_tab_id(target["tab_id"])
-        _page_identity(target["page_url"])
-        if target["marker"] == target["account_marker"]:
-            raise ValueError("Review the record and signed-in account separately")
-        return target
-    value = strict_object(value, required=("app", "window_id", "process_instance", "marker"),
-                          optional=("page_url", "account_marker"))
-    target = {key: text(item, key, 2048) for key, item in value.items()}
-    if not re.fullmatch(r"w-[A-Za-z0-9_-]{1,96}", target["window_id"]):
-        raise ValueError("window_id must come from agent-desktop list-windows")
-    if "page_url" in target:
-        if "account_marker" not in target:
-            raise ValueError("a portal requires a visible signed-in account")
-        _page_identity(target["page_url"])
-    return target
-
-
-def browser_session_name(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}", value):
-        raise ValueError("Use a browser session name of 1–32 letters, digits, hyphens or underscores")
-    return value
-
-
-def browser_tab_id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[0-9A-Fa-f]{32}", value):
-        raise ValueError("Use the tab_id from opl-persona browser inspect")
-    return value
-
-
-def _field_value(value):
-    if not isinstance(value, str) or len(value) > 12000 or "\0" in value:
-        raise ValueError("a field value must be bounded text without NUL")
-    return value
-
-
-def normalize_action(kind, value):
-    if kind == "fill":
-        value = strict_object(value, required=("target", "field", "before", "value"))
-        return {"target": normalize_target(value["target"]), "field": text(value["field"], "field", 512),
-                "before": _field_value(value["before"]), "value": _field_value(value["value"])}
-    if kind != "submit":
-        raise ValueError("unsupported local operation")
-    value = strict_object(value, required=("target", "button", "fields", "result"))
-    fields = value["fields"]
-    if not isinstance(fields, dict) or not fields or len(fields) > 30:
-        raise ValueError("submit requires the reviewed form fields")
-    target = normalize_target(value["target"])
-    result = normalize_target(value["result"])
-    for key in ("app", "window_id", "process_instance", "account_marker", "browser_session", "tab_id"):
-        if target.get(key) != result.get(key):
-            raise ValueError("submission readback must stay in the same window or tab and account")
-    if ("page_url" in target) != ("page_url" in result) or target["marker"] == result["marker"]:
-        raise ValueError("submission requires a distinct receipt marker in the same program")
-    if "page_url" in target and _page_identity(target["page_url"])[:3] != _page_identity(result["page_url"])[:3]:
-        raise ValueError("submission readback must stay on the approved origin")
-    return {"target": target, "button": text(value["button"], "button", 512), "result": result,
-            "fields": {text(key, "field name", 512): _field_value(item) for key, item in fields.items()}}
+from .contract import Readback, ToolPaused, normalize_desktop_target, page_identity, strict_object
 
 
 @contextmanager
@@ -231,6 +150,8 @@ def _control(nodes, role, name):
 
 
 class Desktop:
+    provider = "agent-desktop"
+
     def __init__(self):
         self.binary = shutil.which("agent-desktop")
         if not self.binary:
@@ -266,7 +187,7 @@ class Desktop:
                 break
         raise ToolPaused("Bring the reviewed window to the foreground")
 
-    def observe(self, target, *, wait_for_focus=False):
+    def observe(self, target, *, wait_for_focus=False, visual=False):
         session = _console_session()
         window = self._window(target, wait_for_focus=wait_for_focus)
         snapshot = self._read("snapshot", "--app", target["app"], "--window-id", target["window_id"],
@@ -280,7 +201,7 @@ class Desktop:
             if len(documents) != 1:
                 raise ToolPaused("Could not identify one accessible portal document")
             nodes = list(_nodes(documents[0]))
-        if not _marker(nodes, target["marker"]):
+        if not _marker(nodes, target["marker"]) and not (visual and window.get("title") == target["marker"]):
             raise ToolPaused("The reviewed form or receipt is not visible")
         if target.get("account_marker") and not _marker(nodes, target["account_marker"]):
             raise ToolPaused("The reviewed signed-in account is not visible")
@@ -289,16 +210,80 @@ class Desktop:
             raise ToolPaused("The desktop session changed during observation")
         return nodes
 
+    def capture(self, target):
+        self.observe(target, wait_for_focus=True, visual=True)
+        window = self._window(target)
+        bounds = window.get("bounds")
+        keys = ("x", "y", "width", "height")
+        if (not isinstance(bounds, dict) or any(type(bounds.get(key)) not in (int, float)
+                                               or not math.isfinite(bounds[key]) for key in keys)
+                or bounds["width"] <= 0 or bounds["height"] <= 0):
+            raise ToolPaused("The reviewed window has no usable screen geometry")
+        self.visual_root.mkdir(parents=True, mode=0o700, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=self.visual_root) as directory:
+            image = Path(directory) / "window.png"
+            self._read("screenshot", "--app", target["app"], "--window-id", target["window_id"], str(image))
+            current = self._window(target)
+            if current.get("bounds") != bounds:
+                raise ToolPaused("The reviewed window moved during image capture")
+            if "page_url" in target:
+                self._check_page(target, current)
+            data = image.read_bytes()
+            if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) < 24:
+                raise ToolPaused("The desktop tool did not return a window PNG")
+            size = struct.unpack("!II", data[16:24])
+            if not all(size):
+                raise ToolPaused("The window image has invalid dimensions")
+            digest = hashlib.sha256(data).hexdigest()
+            destination = self.visual_root / f"{digest}.png"
+            image.chmod(0o600)
+            os.replace(image, destination)
+        return {"target": target, "bounds": bounds, "size": list(size), "digest": f"sha256:{digest}",
+                "path": str(destination)}
+
+    @staticmethod
+    def _screen_point(point, capture):
+        width, height = capture["size"]
+        x, y = point
+        if not 0 <= x < width or not 0 <= y < height:
+            raise ToolPaused("The reviewed point is outside the window image")
+        bounds = capture["bounds"]
+        return (math.floor(bounds["x"] + x * bounds["width"] / width),
+                math.floor(bounds["y"] + y * bounds["height"] / height))
+
+    def _visual_preflight(self, kind, payload):
+        capture = self.capture(payload["target"])
+        if capture["digest"] != payload["before"]:
+            raise ToolPaused("The window image changed since review")
+        points = [self._screen_point(payload["at"], capture)]
+        if kind == "drag":
+            points.append(self._screen_point(payload["to"], capture))
+        return capture["bounds"], points
+
+    def readback(self, _action, payload):
+        capture = self.capture(payload["target"])
+        return Readback("visual-result", payload["target"], capture, review_required=True)
+
+    def confirm_readback(self, capture):
+        digest = capture["digest"].removeprefix("sha256:")
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError("The reviewed window image digest is invalid")
+        image = self.visual_root / f"{digest}.png"
+        if image.is_symlink() or not image.is_file() or hashlib.sha256(image.read_bytes()).hexdigest() != digest:
+            raise ValueError("The observed window image changed or is missing")
+
     @staticmethod
     def _check_page(target, window):
         try:
-            live_page = _page_identity(_focused_page_url(window["pid"]))
+            live_page = page_identity(_focused_page_url(window["pid"]))
         except ValueError as exc:
             raise ToolPaused("Could not verify the exact portal page") from exc
-        if live_page != _page_identity(target["page_url"]):
+        if live_page != page_identity(target["page_url"]):
             raise ToolPaused("Open the reviewed portal page")
 
     def preflight(self, kind, payload):
+        if kind in ("click", "drag"):
+            return self._visual_preflight(kind, payload)
         nodes = self.observe(payload["target"], wait_for_focus=True)
         if kind == "fill":
             field = _control(nodes, "textfield", payload["field"])
@@ -322,9 +307,18 @@ class Desktop:
             window = self._window(target)
             if "page_url" in target:
                 self._check_page(target, window)
+            if kind in ("click", "drag"):
+                if self._visual_preflight(kind, payload) != ref or self._window(target).get("bounds") != ref[0]:
+                    return False
         except ToolPaused:
             return False
-        if kind == "fill":
+        if kind == "drag":
+            (start_x, start_y), (end_x, end_y) = ref[1]
+            result = self._run("--headed", "drag", f"--from-xy={start_x},{start_y}", f"--to-xy={end_x},{end_y}")
+        elif kind == "click":
+            (x, y), = ref[1]
+            result = self._run("--headed", "mouse-click", f"--xy={x},{y}")
+        elif kind == "fill":
             result = self._run("set-value", ref, "--stdin", value=payload["value"])
         else:
             result = self._run("click", ref)
@@ -340,3 +334,20 @@ class Desktop:
             return True
         nodes = self.observe(payload["target"])
         return _control(nodes, "textfield", payload["field"]).get("value", "") == payload["value"]
+
+
+def normalize_visual(action, value):
+    if action not in ("click", "drag"):
+        raise ValueError("Unsupported desktop visual operation")
+    required = ("target", "before", "at", "to") if action == "drag" else ("target", "before", "at")
+    value = strict_object(value, required=required)
+    digest = value["before"]
+    if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise ValueError("Use the reviewed window image digest")
+    result = {"target": normalize_desktop_target(value["target"]), "before": digest}
+    for key in required[2:]:
+        point = value[key]
+        if not isinstance(point, list) or len(point) != 2 or any(type(i) is not int or i < 0 for i in point):
+            raise ValueError("Visual points are [x, y] integer pixels in the reviewed image")
+        result[key] = point
+    return result

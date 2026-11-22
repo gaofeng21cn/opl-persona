@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .app_contributions import handle_request
-from .browser_tools import Browser
+from .tool_registry import ToolRegistry
 from .core import (
     build_inbox_capture_proposals,
     build_mail_triage_proposals,
@@ -102,6 +102,17 @@ def build_parser() -> argparse.ArgumentParser:
         if action == "open":
             command.add_argument("--url", required=True, help="打开经过确认的页面")
             command.add_argument("--headless", action="store_true", help="不打开可见窗口")
+            command.add_argument("--shared", action="store_true", help="在用户已授权的 Chrome 中创建独立标签页")
+            command.add_argument("--chrome-port", type=int, help="指定已授权的本机 Chrome 调试端口")
+    tool = sub.add_parser("tool", help="读取工具配置和审核证据")
+    tool_actions = tool.add_subparsers(dest="tool_action", required=True)
+    capture = tool_actions.add_parser("capture-window", help="读取已选中窗口的审核图像")
+    capture.add_argument("--input", required=True, help="目标对象 JSON 文件或 -")
+    catalog = tool_actions.add_parser("connector", help="查看已安装连接器的操作目录")
+    catalog.add_argument("--package-id", required=True)
+    issue = tool_actions.add_parser("github-issue", help="核对 GitHub Issue、标签和当前账号")
+    issue.add_argument("--repo", required=True)
+    issue.add_argument("--number", type=int, required=True)
     proposal = sub.add_parser("proposal")
     proposal_sub = proposal.add_subparsers(dest="kind", required=True)
     for kind in ("publication", "memo", "mail-triage", "inbox-capture", "obsidian-note"):
@@ -155,14 +166,23 @@ def main(argv: list[str] | None = None) -> int:
                 result = paths.setup_status() if args.setup_handler == "status" else paths.init_workspace(local_knowledge=args.local_knowledge)
             result = {"ok": True, "setup": result}
         elif args.command == "browser":
-            browser = Browser(paths, args.session)
+            browser = ToolRegistry(paths).browser_session(args.session)
             if args.browser_action == "close":
                 browser.close()
                 result = {"ok": True, "browser_session": args.session}
             else:
-                observation = (browser.open(args.url, headless=args.headless) if args.browser_action == "open"
+                observation = (browser.open(args.url, headless=args.headless, shared=args.shared,
+                                            chrome_port=args.chrome_port) if args.browser_action == "open"
                                else browser.inspect())
                 result = {"ok": True, **observation}
+        elif args.command == "tool":
+            registry = ToolRegistry(paths)
+            if args.tool_action == "capture-window":
+                result = {"ok": True, "capture": registry.desktop_capture(_read_input(args.input))}
+            elif args.tool_action == "connector":
+                result = {"ok": True, "catalog": registry.connector_catalog(args.package_id)}
+            else:
+                result = {"ok": True, "issue": registry.github_issue(args.repo, args.number)}
         elif args.command == "binding":
             if args.binding_handler == "list":
                 result = {

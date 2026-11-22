@@ -58,9 +58,10 @@ For a task that spans a form and a knowledge update, ask Persona to prepare the
 steps. Review the selected window or browser tab, exact fields and submission before each
 action. In Studio, open **Resumable tasks** to find the current step. Use the same
 task ID in a new Codex conversation to check an interrupted result and continue.
-Use an independent agent-browser session for web forms or macOS Accessibility
-through agent-desktop for a visible native window.
-[Local tasks and portal setup](docs/external-professional-work.md)
+Use a private browser session or a dedicated tab in your authorized Chrome.
+Persona can also review clicks and drags in native windows, add a GitHub issue
+label through your existing login, and continue tasks through compatible OPL
+connector Packages. [Tool setup and recovery](docs/external-professional-work.md)
 
 `context list/select/update`, `people list/update`, `memory list/update/review`,
 and `proposal list/inspect/approve/reject/authorize-obsidian/apply-obsidian`
