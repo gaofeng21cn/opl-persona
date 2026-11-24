@@ -124,7 +124,7 @@ opl-persona --json binding check --id my-knowledge
 旧批准不会使未经核实的来源继续生效。家族级规范以
 [OPL 知识来源与记忆政策](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md)为唯一归口。
 
-完整的提案合同与职责边界见
+完整的提案合同与职责边界见[文档导览](./docs/README.md)与
 [实现架构](./docs/architecture.md)；跨仓目标设计见[架构指引](./docs/architecture-guidance.md)。
 
 ## 在 Codex 中使用

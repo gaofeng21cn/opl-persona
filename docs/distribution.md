@@ -22,15 +22,7 @@ GHCR payload、原生 carrier installed bytes、Framework projection 与 OPL App
 | Codex 插件缓存 | Codex 安装后的插件快照 | 否 |
 | `~/OPL/profiles/<profile>/` | 该用户的分身工作空间、规则、提案与模块状态 | 是 |
 
-分身工作空间（Profile Workspace）是用户的数字分身目录。Persona 使用
-`<profile>/data/persona`，Relay 使用同一分身工作空间下的
-`<profile>/data/relay`。二者通过 `OPL_PROFILE_WORKSPACE` 选择同一个分身，不能各自引入
-第二个数据根。
-
-Obsidian、普通知识目录和网站仓库继续保留在用户选定的位置；本地正文仅在用户选择工作区
-为主源时创建。Persona 保存受控资源绑定（Resource Binding）、带来源版本的派生上下文、
-来源证据和提案状态，不复制知识库、网站检出目录、邮件正文、账户凭据
-或外部系统的审批正文；Persona 自己的 proposal 与批准记录仍归其私有数据目录。
+分身工作空间（Profile Workspace）与 `data/persona/` / `data/relay/` 的目录与数据隔离边界见[实现架构](architecture.md#runtime-data)。Obsidian、普通知识目录和网站仓库继续保留在用户选定的位置；Persona 仅保存受控 Resource Binding、带来源版本的派生上下文和自身提案状态，不复制原始正文或外部凭据。
 
 ## 当前可用分发
 
@@ -58,10 +50,9 @@ codex plugin add opl-persona@opl-persona --json
 这条路径只管理 Codex 插件载体。它不能证明 OPL 能力包已安装、资源绑定已配置，或者任何外部
 资源已经健康可用。
 
-### 本地开发命令行工具
+### 本地启动器安装
 
-`make install-local` 生成用户本地的 `opl-persona` 启动器。它指向当前检出仓库的运行时，用于
-开发与调试；它不是发布器，也不是长期的能力包管理方式。
+`make install-local` 默认（`INSTALL_MODE=codex`）向 `<prefix>/bin/opl-persona` 安装指向已启用原生 Codex 插件 `opl-persona@opl-persona` 的启动器：运行前校验 Codex 启用状态及匹配的 Plugin/Package 身份与版本，随后直接从插件缓存执行最高已安装版本，不指向检出目录也不复制载体。如需独立部署，可显式设置 `INSTALL_MODE=standalone` 将载体复制到 `<prefix>/share/opl-persona`。两种模式均不发布 OCI release；正式 Package 更新统一通过 Framework OCI 生命周期完成。
 
 ## OPL 托管通道
 
@@ -108,17 +99,4 @@ projection 只能聚合这些结果，不能从本仓文档、源码 tag 或 des
 - 单元测试、插件校验与 GitHub 持续集成；
 - 明确的分身工作空间数据边界。
 
-托管通道验证必须分别证明：Package owner 的 immutable version 与 `latest-stable`
-解析到预期公开 digest；配置的原生 carrier 能回读 exact installed bytes；Framework
-projection 与 carrier readback 一致；OPL App 只通过通用 Capability Package projection
-呈现 Persona；所有 lifecycle action 都保持 Profile Workspace 不变。任一单项通过都不
-等于 runtime、Resource Binding、外部资源或产品 ready。
-
-
-`make install-local` installs a stable launcher for the enabled native Codex
-`opl-persona@opl-persona` plugin. It checks the Codex enablement and matching
-Plugin/Package identity and version, then executes the highest installed carrier
-version from its cache. It does not import a checkout or copy another carrier.
-An independent deployment can explicitly use `INSTALL_MODE=standalone` to copy
-the carrier under `<prefix>/share/opl-persona`. Neither mode publishes an OCI
-release; production Package updates use the Framework OCI lifecycle.
+Package projection 与原生 carrier 的独立核验边界见本仓 `AGENTS.md` 与测试套件；任一单项通过均不等于 Resource Binding、外部资源或产品 ready。

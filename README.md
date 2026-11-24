@@ -153,8 +153,8 @@ currentness. The family-wide authority is the
 [OPL knowledge source and memory policy](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md).
 
 For the complete proposal contract and owner boundaries, see
-[Persona Architecture](./docs/architecture.md). Cross-repository target design
-is in [Architecture Guidance](./docs/architecture-guidance.md).
+[Documentation Index](./docs/README.md), [Persona Architecture](./docs/architecture.md),
+and cross-repository [Architecture Guidance](./docs/architecture-guidance.md).
 
 ## Use With Codex
 

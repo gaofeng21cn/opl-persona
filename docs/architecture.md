@@ -16,13 +16,11 @@ documents the supported local form workflow and its connection to that design.
 
 Framework owns the shared Profile Workspace selector, marker and initialization
 mechanics in `python/opl_framework/profile_workspace.py`. The installed Persona
-carrier includes its byte-for-byte generated `_opl_profile_workspace.py`, so
-workspace initialization has no Framework Python dependency. Derived knowledge
-validation calls the installed Framework CLI. Persona retains its templates,
-note-adapter resource bindings and private state. Regenerate the module with Framework's
-`scripts/materialize-python-support.mjs --module profile_workspace --target
-plugins/opl-persona/runtime/opl_persona/_opl_profile_workspace.py`; run
-`OPL_FRAMEWORK_ROOT=<framework-checkout> make test` to check the projection bytes.
+carrier embeds a generated copy in `plugins/opl-persona/runtime/opl_persona/_opl_profile_workspace.py`,
+so workspace initialization has no Framework Python dependency. Persona passes
+`extra_dirs=("data/persona",)` from `paths.py` to initialize its own state
+directory alongside its templates and note-adapter resource bindings, while
+derived-knowledge validation calls the installed Framework CLI.
 
 Persona is a judgment and proposal layer. It does not become a second mail
 store, knowledge vault, or website CMS.
@@ -253,17 +251,12 @@ the adapter's resource grant and the final readback remain distinct records.
 
 ## Inbox and Obsidian proposal contracts
 
-`mail.triage` consumes one validated Relay facts envelope, an agent assessment
-bound to the same email reference, and Persona's private policy/context
-snapshots. The refs-only `data/persona/knowledge-inputs.json` maps the four
-roles `identity`, `team`, `projects`, and `mail_policy` to accepted Framework
-knowledge IDs. All selected sources pass the current-source reader; existing
-files may be registered in place. It validates the decision and produces a
-reviewable proposal and a refs-only
-Inbox capture; missing evidence fails closed. Policy loading, content digests
-and recipient interpretation belong to [Mail Policy](mail-policy.md).
-Persona never treats the Relay refs-set digest as its own policy-content
-digest or turns a triage proposal into a mailbox write.
+`mail.triage` consumes one validated Relay facts envelope, an agent assessment,
+and Persona's private policy/context snapshots (`data/persona/knowledge-inputs.json`
+mapping `identity`, `team`, `projects`, and `mail_policy` to accepted Framework
+knowledge IDs); role selection, digest semantics, and failure rules live in
+[Mail Policy](mail-policy.md). Persona keeps Relay's refs-set digest solely as
+provenance and never turns a triage proposal into a mailbox write.
 
 `inbox.py` stores `opl-persona-inbox.v1` at `data/persona/inbox/items.json`.
 Its item states are `staged`, `routed`, `consumed`, and `discarded`; route refs
@@ -298,13 +291,10 @@ Writes take JSON through `--input <file-or->`; list accepts optional input.
 
 ## Host Boundary
 
-OPL Framework owns the Host for runtime, Package graph, and App projection.
-Studio owns its separate DSH application-host composition; the two scopes
-collaborate through public contracts and do not share internal registries or
-currentness. Persona contributes its Python `app-contribution` ABI through the
-Framework boundary and does not create another Host or lifecycle manager.
-App consumption and review requirements belong to
-[App Integration](app-integration.md).
+Framework owns the Host for runtime, Package graph, and App projection; Studio
+owns its separate DSH application-host composition. Persona contributes its
+Python `app-contribution` ABI through the Framework boundary without creating a
+second Host or lifecycle manager; see [App Integration](app-integration.md).
 
 ## Current Resource Binding
 

@@ -23,16 +23,10 @@ Codex Plugin 与 OPL Package 描述。
 
 ## 文档生命周期
 
-- 双语 README 负责公开安装与首次使用；`docs/architecture.md` 负责当前实现，
-  `architecture-guidance.md` 负责跨域目标边界，`app-integration.md` 负责 App 消费约束，
-  `distribution.md` 负责分发，`mail-policy.md` 负责邮件解释规则。
-- 组合模型、个人资料与表格、对外专业工作各自的目标文档只定义其独立设计问题；
-  未实现候选不当作 callable schema、CLI 或状态机。当前接口仅从 descriptor/source 维护。
-- 改动正文同时更新双语摘要、入口与全部引用；被实现替代的设计细节移入实现 owner 后删除，
-  不保留永久兼容文档、历史状态表、逐次测试清单或第二份 App/Framework 计划。
-- 历史默认由 Git 保存；只有仍影响当前决定的理由、安全约束或有效目标才保留，明确其身份。
-  新增文档须有现有主题不能承担的独立责任。链接、资源、结构检查可以自动化，语义不可用
-  关键词、标题或文本快照裁决。
+- 文档导航与家族生命周期引用归 `docs/README.md`；双语 README 负责公开安装与首次使用，`docs/architecture.md` 负责当前实现，`external-professional-work.md` 负责可恢复任务与本机工具操作手册，`mail-policy.md` 负责邮件政策边界，`app-integration.md` 负责 App 消费约束，`distribution.md` 负责分发，`architecture-guidance.md` 负责跨域与可组合能力目标设计，`personal-profile-form-fill.md` 负责个人资料与批量填表目标设计。
+- 未实现候选不当作 callable schema、CLI 或状态机；当前接口仅从 descriptor/source 维护。
+- 改动正文同时更新双语摘要、入口与全部引用；被实现替代的设计细节移入实现 owner 后删除，不保留永久兼容文档、历史状态表、逐次测试清单或第二份 App/Framework 计划。
+- 历史默认由 Git 保存；新增文档须有现有主题不能承担的独立责任。链接、资源、结构检查可以自动化，语义不可用关键词、标题或文本快照裁决。
 
 - GitHub 上自己新建的对外文本用英文书写：commit subject/body、PR 标题与正文、Issue、comment、Release 正文与 Release Notes。产品名、代码标识、路径、命令与原始引用除外。他人写的 Issue、PR 或 comment，无论对方用什么语言，回复沿用对方的语言；历史中已有的非英文 commit 保持原样。
 

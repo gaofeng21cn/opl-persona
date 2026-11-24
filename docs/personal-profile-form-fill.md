@@ -3,137 +3,44 @@
 Owner: `opl-persona`
 Purpose: `personal_profile_form_fill_target_design`
 State: `active_target_design`
-Machine boundary: 本文定义个人资料主源与可复用字段的目标边界。当前已支持的本机填写与回读以[可恢复任务](external-professional-work.md)及其源码为准。
+Machine boundary: 本文仅定义未实装的个人资料字段目录与批量填表目标合同；当前已支持的单步/多步本机填表与回读见[可恢复任务手册](external-professional-work.md)，通用跨仓边界与 App 视图原则见[架构指引](architecture-guidance.md)。
 
-本文件是 OPL Persona 中“个人资料与表格填写（Personal Profile and Form Fill）”
-子域的目标设计权威。它扩展
-[Architecture Guidance](architecture-guidance.md)，并为
-[对外专业工作](external-professional-work.md)提供受控的个人字段输入；不改变
-Obsidian、邮件、第三方门户或 OPL App 的既有 authority。
+## 目标与当前差距
 
-## 当前实现边界
+当前 `opl-persona` 只导出 `opl-persona` Skill 及现有上下文、记忆、Inbox、Obsidian、邮件、网站与可恢复任务模块。目标设计需要补齐两层而不新建仓库或第二知识库：
 
-当前 owner descriptor 只导出一个 `opl-persona` Skill，以及 context、memory、Inbox、
-Obsidian、mail 和 website proposal modules。现有 Resource Binding 只为用户选择的
-Obsidian 或普通 Markdown 目录提供 opaque binding 与目录检查；知识身份、版本和读取授权
-使用 Framework 的通用机制。Persona 的可恢复任务支持填写一个已经明确定位的文字字段，
-以及按已审核内容提交并核对回执。字段值、目标和执行窗口由用户审核的步骤确定。
-本文的个人字段目录、文档表格解析和批量映射仍属于目标设计。
+- `personal_profile` / `form_fill` Core：持有 `personal_field.v1` 字段身份、来源、当前性、用途白名单、映射、`opl-persona-proposal.v1` 负载与回读 receipt；
+- `personal-form-fill` Skill：将自然语言填表请求路由到 Core，不得仅靠 prompt 记忆或绕过 Core 审批。
 
-## 目标与结论
-
-大学教授经常需要填写讲课、差旅、个人简历、学术任职、报销、收款等表格。可靠填表
-应直接使用用户维护的个人资料，而不是让模型从多个简历、附件和旧表格中猜测哪个版本
-最新。
-
-本子域的目标是：
-
-> 以用户选定主源中的个人资料和字段来源为事实基础，按用途准备表格内容，并以
-> review-gated proposal 输出准确的本地表格或网站草稿。
-
-它必须同时提供一个**核心模块**和一个薄 **Codex Skill**：
-
-- `personal_profile` / `form_fill` Core 负责字段身份、来源、当前性、用途、映射、
-  proposal 与 receipt；
-- `personal-form-fill` Skill 将自然语言请求路由到 Core，并说明当前资料、缺失字段与
-  审核动作；
-- Skill 不是个人信息数据库，不能仅靠 prompt 保存字段，也不能绕过 Core 的用途、
-  approval 和 readback。
-
-不新建 Repo、独立“个人资料 App”、第二套知识库或通用表格渲染器。它是
-`opl-persona` 的可扩展内部模块；现有 Office、PDF、浏览器和网站 adapter 是它的
-执行 surface。
-
-## Authority 与数据边界
-
-| 数据类别 | Authority | Persona 的使用方式 |
-| --- | --- | --- |
-| 履历、单位、职称、研究方向、成果、任职、讲课资料 | 用户选定的资料正文及证明原件 | 通过稳定来源身份与版本读取、核验和引用 |
-| 公共主页和团队简介 | `gflab_web` 与已核验的个人资料 | 依据各自事实范围提供公开表述证据 |
-| 联系方式、办公/通讯地址与邮编 | 用户维护的唯一资料正文 | 按本次用途读取并填入对应字段 |
-| 身份证、护照、银行账户、开户行、税务、收款信息及其他个人资料 | 用户选定的资料正文及证明原件 | 按需读取；只在获准的目标字段中使用 |
-| 邮箱和邮件关系事实 | Relay / 邮件 provider | 仅按已授权用途取用，不把邮箱历史自动变为 profile 值 |
-| 表格字段、提交状态和正式结果 | 目标文件或第三方表单 | adapter 回读后生成 receipt |
-
-个人资料保留在用户选定的唯一主源，包括其需要维护的身份、证件、金融、税务和收款字段。
-该来源可以是已有 Obsidian 库，也可以是普通工作目录；不因使用 Persona 改变归属，
-也不额外建立值库。Persona 只保存可审计的引用、来源版本、当前性、用途和审批状态。
-来源与派生关系遵循
-[Framework 知识来源与记忆政策](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md)。
-
-个人资料值仍不得复制到 Git、Plugin cache、Package 安装目录、聊天记录、截图、
-proposal log 或 OPL App durable state。需要在外部表格中使用时，只把本次批准的字段
-传给对应 adapter；聊天、审批队列和 activity log 默认展示字段名、来源和必要的掩码。
-
-Persona workspace 只保存可审计的引用和 policy：
+个人资料正文（身份、证件、银行、税务、履历等）永久保留在用户选定的唯一主源（Obsidian 或普通工作目录），遵循 [Framework 知识来源与记忆政策](https://github.com/gaofeng21cn/one-person-lab/blob/main/docs/policies/knowledge-source-and-memory-policy.md)。Persona 仅在 `<profile>/profile/` 保存不可入 Git 的引用、规则和映射模板：
 
 ```text
-~/OPL/profiles/<user>/
-├── profile/field-registry.yaml       # field id、classification、value/source ref
-├── profile/policies.yaml             # 用途、核验和审批规则
-└── profile/form-maps/                # 可版本化的表单字段映射；无个人值
+~/OPL/profiles/<user>/profile/
+├── field-registry.yaml   # field_id、classification、value_ref/source_refs（无个人值）
+├── policies.yaml         # 用途、核验与审批规则
+└── form-maps/            # 可版本化的表单字段映射（无个人值）
 ```
 
-这些是私有运行态，不进入源仓、Plugin cache 或 OPL App 的领域状态；它们不是新的值库，
-用户选定的正文主源仍拥有个人资料事实。
+## 字段与回读合同
 
-## 字段与来源合同
-
-每个可填字段都使用稳定 `personal_field.v1` 记录。其最小结构是：
+每个可填字段使用稳定 `personal_field.v1` 记录：
 
 ```text
 field_id             例如 identity.legal_name.zh 或 payment.bank_account
 classification       public | professional | confidential | highly_sensitive
-value_ref            obsidian://...
-source_refs          原始简历、证明、邮件或用户确认的引用
-verified_at           最后人工或权威回读日期
-allowed_purposes      lecture_fee | travel | cv | academic_service | ...
-display_policy        full | masked | never_in_chat
+value_ref            obsidian://...（或选定主源定位）
+source_refs          原始简历、证明、邮件或用户确认引用
+verified_at          最后人工或权威回读日期
+allowed_purposes     lecture_fee | travel | cv | academic_service | ...
+display_policy       full | masked | never_in_chat
 ```
 
-`field_id` 是 API；文件路径、简历段落和表单标题不是 API。模型不能根据相似表述自行
-填充字段，也不能将一个用途的授权扩大到其他用途。敏感等级只用于决定展示和审批
-强度，不改变个人资料的主源归属。
+- `field_id` 是接口契约，禁止模型按相似标题猜测或跨用途复用；缺失来源、用途或有效期限时返回 `needs_user_input`。
+- 所有输出沿用 `opl-persona-proposal.v1`：`form_fill_request.v1` → 字段与缺失检查 → `opl-persona-proposal.v1`（目标模板/站点 identity、字段映射、`value_ref`、预期 `base digest`、掩码 diff）→ 用户批准 → owner adapter 执行 → `form_fill_receipt.v1` 权威回读。
+- 首批目标：`personal.form.docx_draft`、`personal.form.pdf_draft`、`personal.form.xlsx_draft`、`external.portal.form_draft`、`external.portal.form_submit`。
+- 聊天、审批队列与 activity log 默认仅显示字段名、来源与掩码，不保存或泄露原始敏感字段值；上传证件、传输银行信息、网站提交与对外承诺均须逐次精确确认，未知外部结果禁止自动重试。
 
-字段目录必须能回答：“此字段来自哪里、是否仍有效、可用于什么表、是否能在聊天中显示”。
-缺任何一项时，Core 应返回 `needs_user_input`，而不是从旧 CV 或相邻字段猜测。
-
-## 表格、proposal 与回读合同
-
-本子域不创建第二套跨系统写入原语。所有输出仍使用现有
-`opl-persona-proposal.v1`，但 form payload 必须绑定具体的表单、字段和目标：
-
-```text
-form_fill_request.v1
-  -> field discovery and missing-field report
-  -> opl-persona-proposal.v1 (exact template, field map, value refs, diff)
-  -> user approval
-  -> owner adapter writes a draft or submits the exact form
-  -> form_fill_receipt.v1 with authoritative readback
-```
-
-首批 proposal targets：
-
-```text
-personal.form.docx_draft
-personal.form.pdf_draft
-personal.form.xlsx_draft
-external.portal.form_draft
-external.portal.form_submit
-```
-
-proposal 与 receipt 至少要含：目标模板/站点 identity、字段名、字段来源、预期 base
-digest、应用范围、敏感字段 mask、用户批准记录和回读 reference。个人资料值仅可在获准的
-最终字段中写入；聊天、审批队列和 activity log 默认只展示字段名、来源与掩码。
-
-“生成草稿”“保存本地文件”“填入网站”“提交网站表单”“签字/上传证件”是不同状态。
-上传证件、传输银行信息、提交网站、发送电子邮件或作出对外承诺始终需要精确、逐次的
-用户确认；未知外部结果不得自动重试。
-
-## Adapter 与可扩展性
-
-Core 只定义字段、映射、proposal 和验证，不自己解析每一个 Office 文档或操作每一个
-网页。adapter 按目标格式实现，优先复用现有平台能力：
+## Adapter 边界与验收
 
 | Adapter | 负责 | 不负责 |
 | --- | --- | --- |
@@ -141,47 +48,4 @@ Core 只定义字段、映射、proposal 和验证，不自己解析每一个 Of
 | 浏览器 / Portal | 在已授权会话中填入、预览、提交和回读 | 保存密码、绕过 MFA 或扩大 scope |
 | 人工导出 | 生成字段清单和可复制内容 | 伪造已填写/已提交 receipt |
 
-因此一份新表格首先是 `form schema + field map`，不是新代码模块。只有同一类模板或
-站点反复出现、且其结构稳定时，才添加薄 adapter。对外专业门户使用本模块的
-`personal_field.v1`，但仍受其自身 role、site scope 与 per-task approval 约束。
-
-## OPL App 与 Codex Plugin 目标形态
-
-目标形态下，Codex Plugin 将提供 `personal-form-fill` Skill，以及必要的 Core CLI
-action：
-
-```text
-profile audit       汇总缺失、过期和不完整来源的字段
-form inspect        识别模板、字段、约束和目标输出
-form draft          生成带来源和掩码的 proposal
-form apply          仅对已批准 proposal 调用目标 adapter
-form readback       验证文件或网站的实际结果
-```
-
-OPL App 不需要专用“个人资料页面”。它通过既有的角色无关视图渲染：
-
-```text
-task_board      待填表与资料补全任务
-approval_diff   字段级来源、掩码和模板 diff
-artifact_view   模板、草稿和已填文件
-activity_log    adapter 回读与 receipt
-```
-
-App 不能拥有个人值、浏览器 cookie 或领域写入逻辑。
-
-## 分阶段落地与验收
-
-1. **资料盘点**：为用户选定的正文主源建立字段目录、来源与 `verified_at`；不复制资料值到 Persona、
-   Git 或插件缓存。
-2. **单模板闭环**：选择一个真实、常用的讲课/行程/CV 模板，完成
-   inspect → draft → approval → 写入副本 → readback。
-3. **格式扩展**：按实际频率增加 DOCX、PDF、XLSX 或网页 adapter，不重复实现 Core。
-4. **外部提交**：在字段级审批、提交确认和外部 receipt 已验证后，再支持收款、证件
-   上传和网站提交。
-
-完成不是“模型能回答个人资料”或“预览看起来正确”。每个可宣称的闭环都必须证明：
-
-- 每个字段有合法来源、用途和当前性；
-- 个人资料值未泄漏至 Git、日志、聊天或缓存；
-- 保存/提交的目标与批准 proposal 精确一致；
-- owner adapter 已回读实际文件或第三方系统结果。
+新表格优先新增 `form schema + field map`，仅在同类稳定模板或站点高频复用时增加薄 adapter。验收分四步推进（资料盘点 → 单模板闭环 → 格式扩展 → 外部提交），每阶段必须证明字段来源/用途/当前性、零敏感值泄露、目标与批准 proposal 一致及 owner adapter 实际回读。
