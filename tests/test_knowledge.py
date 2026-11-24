@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from opl_persona.knowledge import read_knowledge_source, source_dependencies, verify_knowledge_dependencies
-from opl_persona.paths import PersonaPaths
 from opl_persona.workspace import WORKSPACE_SCHEMA, WorkspaceStore
 
 

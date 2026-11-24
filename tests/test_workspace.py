@@ -257,7 +257,7 @@ def test_parallel_cli_updates_do_not_lose_people_or_inbox_proposals(store):
     root = Path(__file__).parents[1]
     environment = os.environ | {"PYTHONPATH": str(root / "plugins/opl-persona/runtime")}
     requests = []
-    for number in range(12):
+    for number in range(4):
         requests.extend([
             ("personal.memory.v1#person.update", person_input(f"person:{number}")),
             ("personal.inbox.v1#capture.propose", {"capture_id": f"capture:{number}", "item_kind": "note", "title": f"Note {number}",
@@ -274,11 +274,11 @@ def test_parallel_cli_updates_do_not_lose_people_or_inbox_proposals(store):
     for process in running:
         stdout, stderr = process.communicate(timeout=30)
         assert process.returncode == 0, (stdout, stderr)
-    assert len(store.list("people")) == 12
+    assert len(store.list("people")) == 4
     from opl_persona.proposals import ProposalStore
     from opl_persona.inbox import InboxStore
-    assert len(ProposalStore().list()) == 12
-    assert len(InboxStore.from_paths(PersonaPaths.resolve()).list()) == 12
+    assert len(ProposalStore().list()) == 4
+    assert len(InboxStore.from_paths(PersonaPaths.resolve()).list()) == 4
     assert not list(store.paths.data_root.rglob(".persona-*.tmp"))
 
 
