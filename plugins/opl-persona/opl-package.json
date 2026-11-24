@@ -73,7 +73,7 @@
       "skills/opl-persona/agents/openai.yaml",
       "runtime/opl_persona/_opl_profile_workspace.py"
     ],
-    "digest": "sha256:9c13c7199a3ed4a3a7cae5ad5bcb6c3bf6dffe9b74ae8c1943f3412f68b189d1"
+    "digest": "sha256:bf0af703f2f5db1b7009d41ad8ad1464335b45742e4361a562b48fe087f99908"
   },
   "codex_surface": {
     "plugin_id": "opl-persona",
