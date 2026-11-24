@@ -70,7 +70,7 @@ def test_workspace_init_creates_profile_skeleton(tmp_path: Path) -> None:
     assert result["workspace_ready"] is True
     assert (profile / ".opl-profile-workspace.json").is_file()
     assert (profile / "profile").is_dir()
-    assert (profile / "data" / "relay").is_dir()
+    assert not (profile / "data" / "relay").exists()
     assert (profile / "data" / "persona").is_dir()
     assert not (profile / "profile" / "identity.md").exists()
     assert not (profile / "profile" / "preferences.md").exists()

@@ -177,7 +177,7 @@ class PersonaPaths:
     def init_workspace(self, *, local_knowledge: bool = False) -> dict[str, object]:
         self.data_root.mkdir(parents=True, exist_ok=True)
         templates = _TEMPLATES | (_LOCAL_KNOWLEDGE_TEMPLATES if local_knowledge else {})
-        created = initialize_profile_workspace(self.workspace, templates)
+        created = initialize_profile_workspace(self.workspace, templates, extra_dirs=("data/persona",))
         bindings = self.data_root / "resource-bindings.json"
         if not bindings.exists():
             bindings.write_text(_BINDING_STORE_TEMPLATE, encoding="utf-8")
