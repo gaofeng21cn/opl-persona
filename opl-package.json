@@ -1,0 +1,498 @@
+{
+  "schema_version": "opl.package.v2",
+  "identity": {
+    "id": "opl-persona",
+    "version": "0.5.5",
+    "intent": "extension",
+    "name": {
+      "zh-CN": "OPL Persona",
+      "en-US": "OPL Persona"
+    },
+    "summary": {
+      "zh-CN": "有证据支撑的个人上下文、证据记忆与可审核输出提案扩展。",
+      "en-US": "Evidence-backed PI context and reviewable output proposals for OPL."
+    },
+    "description": {
+      "zh-CN": "在 OPL Relay、Obsidian 与实验室网站之间协调已批准的个人上下文，不持有任何私有源数据。",
+      "en-US": "Coordinate approved personal context across OPL Relay, Obsidian, and the lab website without owning any private source data."
+    },
+    "publisher": "one-person-lab",
+    "license": "Apache-2.0",
+    "icon": "assets/icon.png",
+    "repository": "https://github.com/gaofeng21cn/opl-persona",
+    "keywords": [
+      "persona",
+      "memory",
+      "knowledge",
+      "mail",
+      "website"
+    ],
+    "default_prompts": [
+      "根据一篇论文生成知识库更新和实验室网站更新提案。",
+      "把这篇 Obsidian 技术备忘录整理成网站文章和邮件草稿上下文。",
+      "初始化我的 Profile Workspace，检查资源绑定和待审核的 Persona 输出提案。"
+    ]
+  },
+  "dependencies": {
+    "opl_base": "^2.0.0",
+    "runtimes": [
+      {
+        "name": "python",
+        "version": ">=3.11"
+      }
+    ]
+  },
+  "permissions": {
+    "workspace": {
+      "access": "read_write",
+      "reason": {
+        "zh-CN": "读写 Profile Workspace 派生状态与已授权的笔记绑定目标",
+        "en-US": "Read and write Profile Workspace derived state and authorized note bindings"
+      }
+    },
+    "knowledge": [
+      {
+        "scope": "personal_profile",
+        "access": "propose_writeback",
+        "required": false,
+        "reason": {
+          "zh-CN": "读取个人资料与邮件政策并生成可审核写回提案",
+          "en-US": "Read personal profile and mail policies and propose reviewable writebacks"
+        }
+      }
+    ],
+    "network": "outbound_api",
+    "execution_mode": "local_subprocess"
+  },
+  "provides": {
+    "cli_bin": [
+      {
+        "name": "opl-persona",
+        "path": "bin/opl-persona"
+      }
+    ],
+    "skills": [
+      {
+        "id": "opl-persona",
+        "path": "./skills/opl-persona",
+        "exposure": "opt_in"
+      }
+    ],
+    "contribution_handler": {
+      "kind": "cli",
+      "argv": [
+        "./bin/opl-persona",
+        "--json",
+        "app-contribution"
+      ],
+      "transport": "stdin_json_stdout_json"
+    }
+  },
+  "ui": {
+    "declarative": {
+      "navigation": [
+        {
+          "id": "persona.tasks",
+          "label": {
+            "zh-CN": "可恢复任务",
+            "en-US": "Resumable tasks"
+          },
+          "view_id": "persona.tasks",
+          "sort_order": 215
+        },
+        {
+          "id": "persona.today",
+          "label": {
+            "zh-CN": "Persona",
+            "en-US": "Persona"
+          },
+          "view_id": "persona.today",
+          "sort_order": 200
+        },
+        {
+          "id": "persona.contexts",
+          "label": {
+            "zh-CN": "工作模式",
+            "en-US": "Contexts"
+          },
+          "view_id": "persona.contexts",
+          "sort_order": 201
+        },
+        {
+          "id": "persona.people",
+          "label": {
+            "zh-CN": "人物",
+            "en-US": "People"
+          },
+          "view_id": "persona.people",
+          "sort_order": 202
+        },
+        {
+          "id": "persona.memories",
+          "label": {
+            "zh-CN": "证据记忆",
+            "en-US": "Evidence memories"
+          },
+          "view_id": "persona.memories",
+          "sort_order": 203
+        },
+        {
+          "id": "persona.inbox",
+          "label": {
+            "zh-CN": "通用收件箱",
+            "en-US": "Personal Inbox"
+          },
+          "view_id": "persona.inbox",
+          "sort_order": 205
+        },
+        {
+          "id": "persona.proposals",
+          "label": {
+            "zh-CN": "输出提案",
+            "en-US": "Output proposals"
+          },
+          "view_id": "persona.proposals",
+          "sort_order": 210
+        }
+      ],
+      "views": [
+        {
+          "id": "persona.tasks",
+          "view_type": "list_detail",
+          "slot": "workbench.panel",
+          "title": {
+            "zh-CN": "可恢复任务",
+            "en-US": "Resumable tasks"
+          },
+          "data_ref": "personal.context.v1#tasks",
+          "empty_state": {
+            "zh-CN": "暂无任务",
+            "en-US": "No tasks"
+          },
+          "actions": [
+            {
+              "id": "persona.task.prepare",
+              "label": {
+                "zh-CN": "准备任务",
+                "en-US": "Prepare task"
+              },
+              "action_ref": "personal.context.v1#task.prepare",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.task.inspect",
+              "label": {
+                "zh-CN": "查看任务步骤",
+                "en-US": "Inspect task steps"
+              },
+              "action_ref": "personal.context.v1#task.inspect",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.task.run",
+              "label": {
+                "zh-CN": "在目标窗口执行",
+                "en-US": "Run in target window"
+              },
+              "action_ref": "personal.context.v1#task.run",
+              "confirm": true,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.task.check",
+              "label": {
+                "zh-CN": "核对当前步骤",
+                "en-US": "Check current step"
+              },
+              "action_ref": "personal.context.v1#task.check",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.proposal.reject",
+              "label": {
+                "zh-CN": "拒绝提案",
+                "en-US": "Reject proposal"
+              },
+              "action_ref": "personal.context.v1#proposal.reject",
+              "confirm": true,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.proposal.inspect",
+              "label": {
+                "zh-CN": "查看提案证据",
+                "en-US": "Inspect proposal evidence"
+              },
+              "action_ref": "personal.context.v1#proposal.inspect",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.proposal.approve",
+              "label": {
+                "zh-CN": "批准提案",
+                "en-US": "Approve proposal"
+              },
+              "action_ref": "personal.context.v1#proposal.approve",
+              "confirm": true,
+              "effect_timing": "immediate"
+            }
+          ]
+        },
+        {
+          "id": "persona.today",
+          "view_type": "activity_log",
+          "slot": "workbench.panel",
+          "title": {
+            "zh-CN": "PI 数字分身",
+            "en-US": "PI Persona"
+          },
+          "data_ref": "personal.context.v1#today",
+          "empty_state": {
+            "zh-CN": "暂无跨领域活动",
+            "en-US": "No cross-domain activity"
+          }
+        },
+        {
+          "id": "persona.contexts",
+          "view_type": "list_detail",
+          "slot": "workbench.panel",
+          "title": {
+            "zh-CN": "工作模式",
+            "en-US": "Contexts"
+          },
+          "data_ref": "personal.context.v1#contexts",
+          "actions": [
+            {
+              "id": "persona.context.select",
+              "label": {
+                "zh-CN": "选择工作模式",
+                "en-US": "Select context"
+              },
+              "action_ref": "personal.context.v1#context.select",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.context.update",
+              "label": {
+                "zh-CN": "更新工作模式",
+                "en-US": "Update context"
+              },
+              "action_ref": "personal.context.v1#context.update",
+              "confirm": false,
+              "effect_timing": "immediate"
+            }
+          ]
+        },
+        {
+          "id": "persona.people",
+          "view_type": "list_detail",
+          "slot": "workbench.panel",
+          "title": {
+            "zh-CN": "人物",
+            "en-US": "People"
+          },
+          "data_ref": "personal.memory.v1#people",
+          "actions": [
+            {
+              "id": "persona.person.update",
+              "label": {
+                "zh-CN": "更新人物",
+                "en-US": "Update person"
+              },
+              "action_ref": "personal.memory.v1#person.update",
+              "confirm": false,
+              "effect_timing": "immediate"
+            }
+          ]
+        },
+        {
+          "id": "persona.memories",
+          "view_type": "activity_log",
+          "slot": "workbench.panel",
+          "title": {
+            "zh-CN": "证据记忆",
+            "en-US": "Evidence memories"
+          },
+          "data_ref": "personal.memory.v1#memories",
+          "actions": [
+            {
+              "id": "persona.memory.update",
+              "label": {
+                "zh-CN": "更新候选记忆",
+                "en-US": "Update candidate memory"
+              },
+              "action_ref": "personal.memory.v1#memory.update",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.memory.review",
+              "label": {
+                "zh-CN": "审核记忆",
+                "en-US": "Review memory"
+              },
+              "action_ref": "personal.memory.v1#memory.review",
+              "confirm": true,
+              "effect_timing": "immediate"
+            }
+          ]
+        },
+        {
+          "id": "persona.inbox",
+          "view_type": "list_detail",
+          "slot": "workbench.panel",
+          "title": {
+            "zh-CN": "通用收件箱",
+            "en-US": "Personal Inbox"
+          },
+          "data_ref": "personal.inbox.v1#recent",
+          "empty_state": {
+            "zh-CN": "暂无待整理的跨域条目",
+            "en-US": "No cross-domain items to triage"
+          },
+          "actions": [
+            {
+              "id": "persona.inbox.capture",
+              "label": {
+                "zh-CN": "捕获到通用收件箱",
+                "en-US": "Capture to personal inbox"
+              },
+              "action_ref": "personal.inbox.v1#capture.propose",
+              "confirm": false,
+              "effect_timing": "immediate"
+            }
+          ]
+        },
+        {
+          "id": "persona.proposals",
+          "view_type": "approval_diff",
+          "slot": "workbench.panel",
+          "title": {
+            "zh-CN": "输出提案审核",
+            "en-US": "Review output proposals"
+          },
+          "data_ref": "personal.context.v1#proposals",
+          "empty_state": {
+            "zh-CN": "暂无待审核提案",
+            "en-US": "No proposals awaiting review"
+          },
+          "actions": [
+            {
+              "id": "persona.proposal.reject",
+              "label": {
+                "zh-CN": "拒绝提案",
+                "en-US": "Reject proposal"
+              },
+              "action_ref": "personal.context.v1#proposal.reject",
+              "confirm": true,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.obsidian.note.apply",
+              "label": {
+                "zh-CN": "应用已批准笔记",
+                "en-US": "Apply approved note"
+              },
+              "action_ref": "knowledge.obsidian.v1#note.apply",
+              "confirm": true,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.obsidian.note.authorize",
+              "label": {
+                "zh-CN": "授权笔记写入",
+                "en-US": "Authorize note write"
+              },
+              "action_ref": "knowledge.obsidian.v1#note.authorize",
+              "confirm": true,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.proposal.inspect",
+              "label": {
+                "zh-CN": "查看提案证据",
+                "en-US": "Inspect proposal evidence"
+              },
+              "action_ref": "personal.context.v1#proposal.inspect",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.proposal.approve",
+              "label": {
+                "zh-CN": "批准提案",
+                "en-US": "Approve proposal"
+              },
+              "action_ref": "personal.context.v1#proposal.approve",
+              "confirm": true,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.mail.triage",
+              "label": {
+                "zh-CN": "生成邮件分诊提案",
+                "en-US": "Propose mail triage"
+              },
+              "action_ref": "communications.mail.v1#triage.propose",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.mail.draft.feedback",
+              "label": {
+                "zh-CN": "提出沟通偏好修订",
+                "en-US": "Propose a communication preference"
+              },
+              "action_ref": "communications.mail.v1#draft.feedback.propose",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.inbox.capture",
+              "label": {
+                "zh-CN": "捕获到通用收件箱",
+                "en-US": "Capture to personal inbox"
+              },
+              "action_ref": "personal.inbox.v1#capture.propose",
+              "confirm": false,
+              "effect_timing": "immediate"
+            },
+            {
+              "id": "persona.obsidian.note.propose",
+              "label": {
+                "zh-CN": "生成 Obsidian 笔记提案",
+                "en-US": "Propose Obsidian note"
+              },
+              "action_ref": "knowledge.obsidian.v1#note.propose",
+              "confirm": false,
+              "effect_timing": "immediate"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "distribution": {
+    "oci": "ghcr.io/gaofeng21cn/one-person-lab-packages/opl-persona",
+    "visibility": "public"
+  },
+  "host_hints": {
+    "codex": {
+      "sync_enabled": true,
+      "plugin_name": "opl-persona",
+      "category": "Productivity",
+      "brand_color": "#BE304A",
+      "capabilities": [
+        "PI context",
+        "Evidence-backed proposals",
+        "Knowledge-to-website output",
+        "Knowledge-to-mail output"
+      ]
+    }
+  }
+}

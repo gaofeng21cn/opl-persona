@@ -14,8 +14,8 @@ dependencies = []
 opl-persona = "opl_persona.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["plugins/opl-persona/runtime/opl_persona"]
+packages = ["runtime/opl_persona"]
 
 [tool.pytest.ini_options]
-pythonpath = ["plugins/opl-persona/runtime"]
+pythonpath = ["runtime"]
 testpaths = ["tests"]

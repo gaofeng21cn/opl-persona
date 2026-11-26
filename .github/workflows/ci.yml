@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test:
-    name: Test and validate Plugin
+    name: Test and validate Package
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -29,25 +29,20 @@ jobs:
       - name: Run test suite
         run: python -m pytest -q
 
-      - name: Validate JSON and Plugin structure
+      - name: Validate JSON and v2 Package structure
         run: |
-          python -m json.tool .agents/plugins/marketplace.json > /dev/null
-          python -m json.tool plugins/opl-persona/.codex-plugin/plugin.json > /dev/null
-          python -m json.tool plugins/opl-persona/opl-package.json > /dev/null
+          python -m json.tool opl-package.json > /dev/null
           python - <<'PY'
           import json
           from pathlib import Path
 
-          plugin_root = Path("plugins/opl-persona")
-          plugin = json.loads((plugin_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-          marketplace = json.loads(Path(".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
-
-          assert plugin["name"] == "opl-persona"
-          assert plugin["version"]
-          assert (plugin_root / plugin["skills"]).is_dir()
-          assert (plugin_root / "opl-package.json").is_file()
-          assert marketplace["name"] == "opl-persona"
-          assert any(item["name"] == "opl-persona" for item in marketplace["plugins"])
+          manifest = json.loads(Path("opl-package.json").read_text(encoding="utf-8"))
+          assert manifest["schema_version"] == "opl.package.v2"
+          assert manifest["identity"]["id"] == "opl-persona"
+          assert manifest["identity"]["version"]
+          assert Path(manifest["provides"]["skills"][0]["path"], "SKILL.md").is_file()
+          assert Path(manifest["provides"]["cli_bin"][0]["path"]).is_file()
+          assert Path("runtime/opl_persona/cli.py").is_file()
           PY
 
       - name: Verify user documentation links

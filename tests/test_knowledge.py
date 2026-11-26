@@ -25,61 +25,92 @@ def create_memory(store, identifier="research-memory", versions=None):
         source_versions=versions or VERSIONS, expected_digest="absent")
 
 
-def test_source_read_uses_framework_identity_and_checks_exact_revision(store, monkeypatch):
+def _seed_registry(workspace: Path, *, knowledge_id: str, content: str, source_status: str = "active",
+                   item_status: str = "active", next_review_at: str = "2099-01-01T00:00:00Z",
+                   grants_ws: str | None = None, sha_override: str | None = None) -> tuple[Path, str]:
+    source = workspace / "shared" / "memory" / "notes"
+    source.mkdir(parents=True, exist_ok=True)
+    note = source / "research.md"
+    note.write_text(content, encoding="utf-8")
+    digest = sha_override or ("sha256:" + hashlib.sha256(note.read_bytes()).hexdigest())
+    reg_path = workspace / "shared" / "memory" / "sources.json"
+    reg_path.write_text(json.dumps({
+        "sources": [{
+            "source_id": "owner.notes",
+            "root": str(source),
+            "status": source_status,
+            "writable": True,
+            "grants": [{"workspace_root": grants_ws or str(workspace), "domains": ["persona"],
+                        "write_domains": ["persona"], "scope_ids": ["owner.scope"]}],
+        }],
+        "items": [{
+            "knowledge_id": knowledge_id,
+            "status": item_status,
+            "scope": {"kind": "topic", "id": "owner.scope"},
+            "applicability": {"domains": ["persona"]},
+            "body_ref": {"source_id": "owner.notes", "ref": note.name, "sha256": digest},
+            "next_review_at": next_review_at,
+        }],
+    }), encoding="utf-8")
+    (workspace / "shared" / "memory" / "knowledge-bindings.json").write_text(json.dumps({
+        "registries": [{"registry_ref": str(reg_path), "source_ids": ["owner.notes"], "scope_ids": ["owner.scope"]}]
+    }), encoding="utf-8")
+    return note, digest
+
+
+def test_source_read_uses_authorized_binding_and_checks_exact_revision(store):
     content = "# 用户知识\n证据与解释分开。\n"
-    source = {"knowledge_id": "owner.research.design", "content": content,
-              "sha256": "sha256:" + hashlib.sha256(content.encode()).hexdigest(),
-              "source_ref": "knowledge-source://owner.notes/research.md"}
-    def run(argv, **kwargs):
-        assert argv == ["opl", "knowledge", "read-source", "--workspace", str(store.paths.workspace),
-                        "--domain", "persona", "--id", source["knowledge_id"], "--json"]
-        assert kwargs["env"]["OPL_PROFILE_WORKSPACE"] == str(store.paths.workspace)
-        return subprocess.CompletedProcess(argv, 0, json.dumps({"version": "g2", "knowledge_source": source}), "")
-    monkeypatch.setattr(subprocess, "run", run)
-    assert read_knowledge_source(source["knowledge_id"], store.paths) == source
+    note, digest = _seed_registry(store.paths.workspace, knowledge_id="owner.research.design", content=content)
+    assert read_knowledge_source("owner.research.design", store.paths) == {
+        "knowledge_id": "owner.research.design",
+        "sha256": digest,
+        "content": content,
+        "source_ref": note.name,
+    }
 
 
-@pytest.mark.parametrize("mutation", [
-    {"knowledge_id": "owner.other"}, {"sha256": "sha256:" + "0" * 64},
-    {"content": ""}, {"content": "x" * (256 * 1024 + 1)}, {"source_ref": ""},
+@pytest.mark.parametrize("bad_case", [
+    {"knowledge_id": "owner.other"},
+    {"sha_override": "sha256:" + "0" * 64},
+    {"content": ""},
+    {"content": "x" * (256 * 1024 + 1)},
+    {"source_status": "revoked"},
+    {"item_status": "revoked"},
+    {"grants_ws": "/tmp/other-workspace"},
 ])
-def test_source_read_rejects_wrong_identity_or_revision_without_exposing_content(store, monkeypatch, mutation):
+def test_source_read_rejects_wrong_identity_or_revision_without_exposing_content(store, bad_case):
     content = "private identity body"
-    source = {"knowledge_id": "owner.research.design", "content": content,
-              "sha256": "sha256:" + hashlib.sha256(content.encode()).hexdigest(), "source_ref": "knowledge://owner"}
-    source.update(mutation)
-    monkeypatch.setattr(subprocess, "run", lambda argv, **kwargs:
-        subprocess.CompletedProcess(argv, 0, json.dumps({"version": "g2", "knowledge_source": source}), ""))
+    _seed_registry(
+        store.paths.workspace,
+        knowledge_id=bad_case.get("knowledge_id", "owner.research.design"),
+        content=bad_case.get("content", content),
+        source_status=bad_case.get("source_status", "active"),
+        item_status=bad_case.get("item_status", "active"),
+        grants_ws=bad_case.get("grants_ws"),
+        sha_override=bad_case.get("sha_override"),
+    )
     with pytest.raises(ValueError, match="requires current Framework readback") as error:
         read_knowledge_source("owner.research.design", store.paths)
     assert content not in str(error.value)
 
 
-def test_framework_verification_uses_body_free_public_contract_and_private_temporary_request(store, monkeypatch):
-    seen = []
-    def run(argv, **kwargs):
-        request = Path(argv[argv.index("--dependencies") + 1])
-        seen.append(request)
-        assert stat.S_IMODE(request.stat().st_mode) == 0o600
-        assert json.loads(request.read_text()) == [{"knowledge_id": "owner.research.design", "sha256": "sha256:" + "a" * 64}]
-        assert argv[:3] == ["opl", "knowledge", "verify-dependencies"]
-        assert argv[argv.index("--domain") + 1] == "persona"
-        assert argv[argv.index("--workspace") + 1] == str(store.paths.workspace)
-        assert kwargs["env"]["OPL_PROFILE_WORKSPACE"] == str(store.paths.workspace)
-        return subprocess.CompletedProcess(argv, 0, json.dumps({"version": "g2", "knowledge_dependencies": {"valid": True, "issues": []}}), "")
-    monkeypatch.setattr(subprocess, "run", run)
-    assert verify_knowledge_dependencies(VERSIONS, store.paths) == {"valid": True, "issues": []}
-    assert all(not path.exists() for path in seen)
+def test_framework_verification_checks_bindings_and_digests_without_leaking_body(store):
+    _note, digest = _seed_registry(store.paths.workspace, knowledge_id="owner.research.design", content="# Principle\n")
+    assert verify_knowledge_dependencies({"owner.research.design": digest}, store.paths) == {"valid": True, "issues": []}
+    drifted = verify_knowledge_dependencies({"owner.research.design": "sha256:" + "a" * 64}, store.paths)
+    assert drifted == {"valid": False, "issues": ["source_drifted:owner.research.design"]}
 
 
-@pytest.mark.parametrize("response", [
-    {}, {"version": "v1", "knowledge_dependencies": {"valid": True, "issues": []}},
-    {"version": "g2", "knowledge_dependencies": {"valid": 1, "issues": []}},
-    {"version": "g2", "knowledge_dependencies": {"valid": True, "issues": ["revoked"]}},
-])
-def test_verification_rejects_invalid_or_inconsistent_responses(store, monkeypatch, response):
-    monkeypatch.setattr(subprocess, "run", lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, json.dumps(response), ""))
-    assert verify_knowledge_dependencies(VERSIONS, store.paths)["valid"] is False
+def test_verification_rejects_expired_and_revoked_dependencies(store):
+    _note, digest = _seed_registry(
+        store.paths.workspace,
+        knowledge_id="owner.research.design",
+        content="# Expired\n",
+        next_review_at="2020-01-01T00:00:00Z",
+    )
+    verdict = verify_knowledge_dependencies({"owner.research.design": digest}, store.paths)
+    assert verdict["valid"] is False
+    assert "source_expired:owner.research.design" in verdict["issues"]
 
 
 @pytest.mark.parametrize("value", [None, {}, [], {"../outside": "sha256:" + "a" * 64},
@@ -143,10 +174,7 @@ def test_people_and_custom_context_are_revalidated_too(store, monkeypatch):
     assert person["id"] == "researcher"
 
 
-def test_unavailable_framework_excludes_summary_and_cannot_approve_it(store, monkeypatch):
-    def unavailable(*args, **kwargs):
-        raise FileNotFoundError("not installed")
-    monkeypatch.setattr(subprocess, "run", unavailable)
+def test_unavailable_framework_excludes_summary_and_cannot_approve_it(store):
     candidate = create_memory(store)
     assert candidate["source_verification"]["valid"] is False
     with pytest.raises(ValueError, match="framework_knowledge_verification_unavailable"):
@@ -201,21 +229,12 @@ def test_modified_default_fields_cannot_bypass_source_review_during_migration(st
     assert store.context()["excluded_knowledge"][0]["id"] == item["id"]
 
 
-def test_project_is_forwarded_to_reads_and_verification(store, monkeypatch):
-    monkeypatch.setenv("OPL_PROJECT_ROOT", "/private/projects/synthetic")
-    seen = []
-    def run(argv, **kwargs):
-        seen.append(argv)
-        assert argv[argv.index("--project") + 1] == "/private/projects/synthetic"
-        if "read-source" in argv:
-            body = "# Synthetic\n"
-            source = {"knowledge_id": "owner.test", "content": body, "source_ref": "test.md",
-                      "sha256": "sha256:" + hashlib.sha256(body.encode()).hexdigest()}
-            result = {"knowledge_source": source}
-        else:
-            result = {"knowledge_dependencies": {"valid": True, "issues": []}}
-        return subprocess.CompletedProcess(argv, 0, json.dumps({"version": "g2", **result}), "")
-    monkeypatch.setattr(subprocess, "run", run)
-    read_knowledge_source("owner.test", store.paths)
-    assert verify_knowledge_dependencies(VERSIONS, store.paths)["valid"]
-    assert len(seen) == 2
+def test_symlink_body_escaping_source_root_is_rejected(store):
+    note, digest = _seed_registry(store.paths.workspace, knowledge_id="owner.test", content="# Synthetic\n")
+    outside = store.paths.workspace / "outside.md"
+    outside.write_text("# Outside\n", encoding="utf-8")
+    note.unlink()
+    note.symlink_to(outside)
+    with pytest.raises(ValueError, match="requires current Framework readback"):
+        read_knowledge_source("owner.test", store.paths)
+    assert verify_knowledge_dependencies({"owner.test": digest}, store.paths)["valid"] is False

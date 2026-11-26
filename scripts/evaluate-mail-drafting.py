@@ -128,7 +128,7 @@ def main():
     parser.add_argument("--relay", default="opl-relay")
     parser.add_argument("--model")
     args = parser.parse_args()
-    persona = ROOT / "plugins/opl-persona/bin/opl-persona"
+    persona = ROOT / "bin/opl-persona"
     with tempfile.TemporaryDirectory(prefix="opl-persona-mail-eval-") as temp:
         root = Path(temp)
         profile, vault, scope = seed(root)

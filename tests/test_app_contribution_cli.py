@@ -25,7 +25,7 @@ from knowledge_inputs import POLICY_ID, configure_knowledge_inputs
 
 
 ROOT = Path(__file__).parents[1]
-PLUGIN_ROOT = ROOT / "plugins" / "opl-persona"
+PLUGIN_ROOT = ROOT
 
 
 @pytest.fixture(autouse=True)
@@ -390,7 +390,14 @@ def test_descriptor_ref_sets_match_the_only_supported_abi_refs() -> None:
 
 def test_installed_carrier_wrapper_serves_abi_without_the_source_checkout(tmp_path: Path) -> None:
     installed_root = tmp_path / "installed-plugin"
-    shutil.copytree(PLUGIN_ROOT, installed_root)
+    installed_root.mkdir()
+    shutil.copy2(PLUGIN_ROOT / "opl-package.json", installed_root / "opl-package.json")
+    for subdir in ("bin", "runtime", "skills", "assets"):
+        shutil.copytree(
+            PLUGIN_ROOT / subdir,
+            installed_root / subdir,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
     wrapper = installed_root / "bin" / "opl-persona"
     wrapper.chmod(0o755)
     request = {
@@ -446,6 +453,47 @@ def read_collection(ref, value=None):
                                      "ref": ref, "input": value or {}})
     assert code == 0, response
     return response["result"]
+
+
+def test_v2_contribution_dispatcher_envelopes_read_and_execute_dry_run(tmp_path: Path) -> None:
+    read_code, read_resp = handle_request({
+        "schema_version": REQUEST_SCHEMA,
+        "operation": "read",
+        "package_id": "opl-persona",
+        "ref": "personal.context.v1#contexts",
+        "input": {},
+    })
+    assert read_code == 0, read_resp
+    assert read_resp["ok"] is True
+
+    dry_code, dry_resp = handle_request({
+        "schema_version": REQUEST_SCHEMA,
+        "operation": "execute",
+        "package_id": "opl-persona",
+        "action_id": "personal.inbox.v1#capture.propose",
+        "payload": {
+            "capture_id": "knowledge://memo/dry-run",
+            "item_kind": "knowledge",
+            "title": "Dry run memo",
+            "summary": "Should not persist during dry_run.",
+            "source_refs": ["obsidian://vault/dry.md"],
+        },
+        "dry_run": True,
+    })
+    assert dry_code == 0, dry_resp
+    assert dry_resp["result"]["status"] == "dry_run_valid"
+    assert dry_resp["result"]["dry_run"] is True
+    assert InboxStore.from_paths(PersonaPaths.resolve()).list() == []
+
+    bad_pkg_code, bad_pkg_resp = handle_request({
+        "schema_version": REQUEST_SCHEMA,
+        "operation": "read",
+        "package_id": "other-pkg",
+        "ref": "personal.context.v1#contexts",
+        "input": {},
+    })
+    assert bad_pkg_code == 2
+    assert "unsupported package_id" in bad_pkg_resp["error"]["message"]
 
 
 @pytest.mark.parametrize("ref", DATA_CONTRACTS)

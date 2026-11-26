@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 .mypy_cache/
 .ruff_cache/
+.codegraph/
+/opl-release.lock.json
 
 # Private runtime data is never source-controlled.
 .persona-data/

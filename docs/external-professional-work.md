@@ -3,7 +3,7 @@
 Owner: `opl-persona`
 Purpose: `resumable_tasks_and_local_tool_handbook`
 State: `active_current`
-Machine boundary: 本文记录当前已实装的可恢复任务（`personal.context.v1#tasks`）与本机/连接器工具操作入口；源码与测试归 `plugins/opl-persona/runtime/opl_persona/` 与 `tests/`。未实现的个人字段目录与网站门户目标边界见[架构指引](architecture-guidance.md)和[个人资料与表格填写](personal-profile-form-fill.md)。
+Machine boundary: 本文记录当前已实装的可恢复任务（`personal.context.v1#tasks`）与本机/连接器工具操作入口；源码与测试归 `runtime/opl_persona/` 与 `tests/`。未实现的个人字段目录与网站门户目标边界见[架构指引](architecture-guidance.md)和[个人资料与表格填写](personal-profile-form-fill.md)。
 
 Persona 可以在已登录的网页填表，在 macOS 窗口点击或拖动，也可以调用支持操作回执的连接器。一个任务可串联这些操作和已有的笔记提案。Studio 的「可恢复任务」与 Codex 共用任务记录；邮件、笔记和网站的专用接口仍各自负责业务数据。
 

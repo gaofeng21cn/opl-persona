@@ -26,8 +26,11 @@
     "pyproject.toml"
   ],
   "owned_by_repo": [
+    "opl-package.json",
+    "bin/**",
+    "runtime/**",
+    "skills/**",
     "contracts/**",
-    "plugins/opl-persona/**",
     "scripts/**",
     "tests/**"
   ],

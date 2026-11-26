@@ -31,52 +31,46 @@ def approve(store, item):
 
 
 def test_independent_connector_recovers_original_operation_without_repeating(monkeypatch, tmp_path):
-    fixture = tmp_path / "opl"
     receipt = tmp_path / "remote-receipt.json"
-    fixture.write_text("""#!/usr/bin/env python3
-import json
-import os
-from pathlib import Path
-import sys
+    bad_receipt = {"enabled": False}
 
-args = sys.argv[1:]
-method = args[2]
-package = args[args.index('--package-id') + 1]
-ref = args[args.index('--ref') + 1]
-phase = ref.split('#')[1]
-value = json.load(sys.stdin)
-store = Path(os.environ['TEST_TOOL_RECEIPT'])
-assert '--input-stdin' in args and package == 'fixture-tasks'
-if phase == 'operations':
-    assert method == 'read' and '--confirm' not in args
-    data = {'schema_version': 'opl-tool-operations.v1', 'operations': [{'id': 'task.complete'}]}
-else:
-    identity = {key: value[key] for key in ('operation_id', 'operation', 'target_ref', 'expected_revision')}
-    data = {'schema_version': 'opl-tool-operation.v1', **identity}
-    if phase == 'execute':
-        assert method == 'execute' and '--confirm' in args and value['input'] == {'complete': True}
-        with store.open('x') as out:
-            json.dump(identity, out)
-        sys.exit(75)
-    assert method == 'read' and '--confirm' not in args
-    if phase == 'preflight':
-        data['state'] = 'ready' if value['expected_revision'] == 'rev-4' else 'stale'
-    else:
-        assert 'input' not in value and json.loads(store.read_text()) == identity
-        data.update(state='applied', receipt_ref='fixture://receipts/' + value['operation_id'])
-        if os.environ.get('TEST_TOOL_BAD_RECEIPT'):
-            data['operation_id'] = 'wrong-operation'
-print(json.dumps({'opl_app_contribution': {
-    'surface_kind': 'opl_app_package_contribution.v1', 'package_id': package, 'ref': ref,
-    'operation': method, 'response': {
-        'schema_version': 'opl-package-app-contribution-response.v1', 'ok': True, 'ref': ref,
-        'operation': method, 'result': {'kind': 'data', 'state': 'ready', 'data': data},
-    },
-}}))
-""", encoding="utf-8")
-    fixture.chmod(0o700)
-    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
-    monkeypatch.setenv("TEST_TOOL_RECEIPT", str(receipt))
+    class FakeClient:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def call(self, method, params):
+            package = params["package_id"]
+            assert package == "fixture-tasks"
+            if method == "app.contribution.execute":
+                ref = params["action_id"]
+                value = params["payload"]
+                assert ref == "tool.execution.v1#execute"
+                assert value["input"] == {"complete": True}
+                identity = {key: value[key] for key in ("operation_id", "operation", "target_ref", "expected_revision")}
+                with receipt.open("x") as out:
+                    json.dump(identity, out)
+                raise OSError("simulated daemon drop during execute")
+            assert method == "app.contribution.read"
+            ref = params["ref"]
+            phase = ref.split("#")[1]
+            value = params["input"]
+            if phase == "operations":
+                return {"kind": "data", "state": "ready", "data": {
+                    "schema_version": "opl-tool-operations.v1", "operations": [{"id": "task.complete"}],
+                }}
+            identity = {key: value[key] for key in ("operation_id", "operation", "target_ref", "expected_revision")}
+            data = {"schema_version": "opl-tool-operation.v1", **identity}
+            if phase == "preflight":
+                data["state"] = "ready" if value["expected_revision"] == "rev-4" else "stale"
+            else:
+                assert "input" not in value and json.loads(receipt.read_text()) == identity
+                data.update(state="applied", receipt_ref="fixture://receipts/" + value["operation_id"])
+                if bad_receipt["enabled"]:
+                    data["operation_id"] = "wrong-operation"
+            return {"kind": "data", "state": "ready", "data": data}
+
+    monkeypatch.setattr("opl_persona.tools.package.connect", lambda: FakeClient())
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(tmp_path / "profile"))
     store = TaskStore()
     assert store.tools.connector_catalog("fixture-tasks")["operations"] == [{"id": "task.complete"}]
@@ -90,9 +84,9 @@ print(json.dumps({'opl_app_contribution': {
     restarted = TaskStore()
     with pytest.raises(ValueError, match="original operation"):
         restarted.run(**action)
-    monkeypatch.setenv("TEST_TOOL_BAD_RECEIPT", "1")
+    bad_receipt["enabled"] = True
     assert restarted.check(task_id=item["id"])["status"] == "needs-check"
-    monkeypatch.delenv("TEST_TOOL_BAD_RECEIPT")
+    bad_receipt["enabled"] = False
     completed = restarted.check(task_id=item["id"])
     step = completed["steps"][0]
     assert completed["status"] == "complete" and step["attempts"] == 1

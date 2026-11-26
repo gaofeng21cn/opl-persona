@@ -3,7 +3,7 @@
 Owner: `opl-persona`
 Purpose: `persona_mail_policy_boundary`
 State: `active_current`
-Machine boundary: 当前行为归 `plugins/opl-persona/runtime/opl_persona/policy.py`、`knowledge.py`、`core.py`、`plugins/opl-persona/opl-package.json` 与 `tests/test_policy.py` / `tests/test_core.py`。本文不能证明私有 Profile Workspace 可用、Plugin/Package installed current、App 已消费贡献或任何 mailbox mutation；邮件事实、草稿、发送和最终回读仍归 Relay 与邮件 owner。
+Machine boundary: 当前行为归 `runtime/opl_persona/policy.py`、`knowledge.py`、`core.py`、`opl-package.json` 与 `tests/test_policy.py` / `tests/test_core.py`。本文不能证明私有 Profile Workspace 可用、Plugin/Package installed current、App 已消费贡献或任何 mailbox mutation；邮件事实、草稿、发送和最终回读仍归 Relay 与邮件 owner。
 
 OPL Persona interprets mail rules from the user's selected canonical knowledge
 sources. Rules, identity facts, team records, and project context may live in
