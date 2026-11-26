@@ -14,13 +14,13 @@ documents the supported local form workflow and its connection to that design.
 
 ## Owner split
 
-Framework owns the shared Profile Workspace selector, marker and initialization
-mechanics in `python/opl_framework/profile_workspace.py`. The installed Persona
-carrier embeds a generated copy in `plugins/opl-persona/runtime/opl_persona/_opl_profile_workspace.py`,
-so workspace initialization has no Framework Python dependency. Persona passes
+Persona embeds the shared Profile Workspace selector, marker and initialization
+mechanics in `runtime/opl_persona/_opl_profile_workspace.py`,
+so workspace initialization has no external Framework Python dependency. Persona passes
 `extra_dirs=("data/persona",)` from `paths.py` to initialize its own state
 directory alongside its templates and note-adapter resource bindings, while
-derived-knowledge validation calls the installed Framework CLI.
+derived-knowledge validation verifies authorized `knowledge-bindings.json` / `sources.json`
+entries and notifies `opld` via `opl_client`.
 
 Persona is a judgment and proposal layer. It does not become a second mail
 store, knowledge vault, or website CMS.
@@ -109,12 +109,8 @@ original source and takes effect on the next read after acceptance. See
 `source_versions` is a non-empty object mapping accepted knowledge identities
 to exact `sha256:...` revisions. For people, memories and customized modes,
 Persona stores a derived summary plus these dependencies in
-`opl-persona-workspace.v2`. It delegates source validation to:
-
-```bash
-opl knowledge verify-dependencies --workspace <Profile> --domain persona \
-  --dependencies <array-json-file> --json
-```
+`opl-persona-workspace.v2`. It delegates source validation to `opl_persona.knowledge.verify_knowledge_dependencies`
+against authorized workspace bindings (`knowledge-bindings.json` / `sources.json`).
 
 The private input array contains `{knowledge_id, sha256}` objects; the returned
 verdict is body-free. Approval and context assembly require current, authorized
@@ -135,8 +131,8 @@ backs up the original JSON, preserves records, and marks non-product records
 for source review. Existing approvals cannot admit those records into current
 context until their source dependencies have been supplied and checked.
 
-Relay mail memory is read through `opl app contribution read --package-id
-opl-relay` at `personal.memory.v1#people` and `#search`, with the same Profile
+Relay mail memory is read through `opld` `app.contribution.read` via `opl_client`
+(`package_id: "opl-relay"`) at `personal.memory.v1#people` and `#search`, with the same Profile
 selector. Approved bounded evidence is not persisted by Persona. Missing Relay
 availability is a local diagnostic in a ready Persona read model; there is no
 database fallback. Cross-source derived state lives in `data/persona/workspace.json`.

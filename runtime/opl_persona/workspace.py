@@ -7,12 +7,19 @@ import errno
 import hashlib
 import json
 import os
-import subprocess
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+try:
+    from opl_client import OplClientError, connect
+except ModuleNotFoundError:  # pragma: no cover - optional when opl_client SDK is absent
+    class OplClientError(RuntimeError):
+        """Fallback error type when opl_client is unavailable."""
+
+    connect = None  # type: ignore[assignment]
 
 from .paths import PersonaPaths
 from .knowledge import source_dependencies, verify_knowledge_dependencies
@@ -125,34 +132,48 @@ def current_relay_memory(item: object) -> bool:
 
 
 def relay_read(ref: str, value: dict[str, Any], paths: PersonaPaths) -> dict[str, Any]:
-    """Use only Relay's package-scoped public read ABI, never a private store."""
+    """Use only Relay's package-scoped public read ABI via opld, never a private store."""
     if ref not in {"personal.memory.v1#people", "personal.memory.v1#search"}:
         raise ValueError("unsupported Relay memory read ref")
-    request = ["opl", "app", "contribution", "read", "--package-id", "opl-relay", "--ref", ref,
-               "--input", json.dumps(value), "--json"]
+    del paths  # opld manages workspace isolation; Persona keeps paths arg for ABI stability.
+    client_connect = connect
+    client_error = OplClientError
+    if client_connect is None:
+        try:
+            from opl_client import OplClientError as _SdkError, connect as _sdk_connect
+            client_connect = _sdk_connect
+            client_error = _SdkError
+        except ModuleNotFoundError:
+            return {"state": "unavailable", "items": [], "package_id": "opl-relay", "ref": ref,
+                    "reason": "Relay public memory ABI unavailable"}
+    elif client_error.__module__ == __name__:
+        try:
+            from opl_client import OplClientError as _SdkError
+            client_error = _SdkError
+        except ModuleNotFoundError:
+            pass
     try:
-        result = subprocess.run(request, capture_output=True, text=True, timeout=30,
-                                env=os.environ | {"OPL_PROFILE_WORKSPACE": str(paths.workspace)}, check=False)
-        if result.returncode:
-            raise ValueError("Relay public read failed")
-        envelope = json.loads(result.stdout)
-        contribution = envelope.get("opl_app_contribution") if isinstance(envelope, dict) else None
-        if (not isinstance(contribution, dict)
-                or contribution.get("surface_kind") != "opl_app_package_contribution.v1"
-                or contribution.get("package_id") != "opl-relay"
-                or contribution.get("ref") != ref
-                or contribution.get("operation") != "read"):
-            raise ValueError("Relay public read returned an invalid Framework identity")
-        response = contribution.get("response")
-        if (not isinstance(response, dict)
-                or response.get("schema_version") != "opl-package-app-contribution-response.v1"
-                or response.get("ok") is not True
-                or response.get("ref") != ref
-                or response.get("operation") != "read"):
+        with client_connect() as client:
+            raw_response = client.call(
+                "app.contribution.read",
+                {"package_id": "opl-relay", "ref": ref, "input": value},
+            )
+        if not isinstance(raw_response, dict):
+            raise ValueError("Relay public read returned a non-object response")
+        if raw_response.get("ok") is False:
+            raise ValueError("Relay public read returned ok=False")
+        if "opl_app_contribution" in raw_response:
+            raise ValueError("Unexpected v1 wrapper from v2 opld")
+        payload = raw_response.get("result") if isinstance(raw_response.get("result"), dict) else raw_response
+        if not isinstance(payload, dict):
+            raise ValueError("Relay memory read payload is invalid")
+        if payload.get("package_id") not in (None, "opl-relay") or payload.get("ref") not in (None, ref):
             raise ValueError("Relay public read returned an invalid package identity")
-        payload = response.get("result")
-        if not isinstance(payload, dict) or payload.get("kind") != "data" or payload.get("state") != "ready":
+        state_val = payload.get("state") or payload.get("status")
+        if state_val != "ready":
             raise ValueError("Relay memory read is not ready")
+        if "kind" in payload and payload.get("kind") != "data":
+            raise ValueError("Relay memory read kind must be data")
         data = payload.get("data")
         if not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise ValueError("Relay memory read must contain data.items")
@@ -181,7 +202,7 @@ def relay_read(ref: str, value: dict[str, Any], paths: PersonaPaths) -> dict[str
             items.append(item)
         return {"state": "ready", "items": items, "source_policy": copy.deepcopy(policy),
                 "package_id": "opl-relay", "ref": ref}
-    except (OSError, ValueError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, client_error):
         return {"state": "unavailable", "items": [], "package_id": "opl-relay", "ref": ref,
                 "reason": "Relay public memory ABI unavailable"}
 

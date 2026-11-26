@@ -26,38 +26,17 @@ GHCR payload、原生 carrier installed bytes、Framework projection 与 OPL App
 
 ## 当前可用分发
 
-### Codex 插件市场
+### Codex 插件同步
 
-仓库根的 `.agents/plugins/marketplace.json` 当前发布 `opl-persona` 插件。Codex 可以从：
-
-1. 本地检出目录读取这个插件市场；
-2. 从 GitHub 仓库拉取一个插件市场快照。
-
-插件市场内部的 `source: local` 是相对于插件市场根目录的路径。在 Git 插件市场场景下，这个
-目录位于 Codex 已取得的快照中，因此不要求用户手工维护插件缓存。
-
-本地检出目录和 Git 插件市场统一使用正式标识 `opl-persona`。这个标识只代表 Codex 插件市场，
-等同于 descriptor 声明的 `codex_surface.configured_codex_plugin_carrier.plugin_selector`；
-它不等同于 OPL 托管能力包的远端通道，后者只由同一 carrier 块的 `publication_ref` 声明。
-
-使用 Git 插件市场时，刷新快照和重新安装插件的命令是：
-
-```bash
-codex plugin marketplace upgrade opl-persona --json
-codex plugin add opl-persona@opl-persona --json
-```
-
-这条路径只管理 Codex 插件载体。它不能证明 OPL 能力包已安装、资源绑定已配置，或者任何外部
-资源已经健康可用。
+OPL Pack 在安装或开发链接（`opl pack link .`）时通过 `carriers/codex-sync` 从根目录唯一 `opl-package.json`（`opl.package.v2`）自动生成 Codex marketplace 投影，仓内不再维护 `.agents/plugins/marketplace.json` 或 `plugins/opl-persona/` 镜像目录。
 
 ### 本地启动器安装
 
-`make install-local` 默认（`INSTALL_MODE=codex`）向 `<prefix>/bin/opl-persona` 安装指向已启用原生 Codex 插件 `opl-persona@opl-persona` 的启动器：运行前校验 Codex 启用状态及匹配的 Plugin/Package 身份与版本，随后直接从插件缓存执行最高已安装版本，不指向检出目录也不复制载体。如需独立部署，可显式设置 `INSTALL_MODE=standalone` 将载体复制到 `<prefix>/share/opl-persona`。两种模式均不发布 OCI release；正式 Package 更新统一通过 Framework OCI 生命周期完成。
+`make install-local` 默认（`INSTALL_MODE=codex`）向 `<prefix>/bin/opl-persona` 安装指向 `$OPL_STATE_DIR/packages/opl-persona/<version>/bin/opl-persona` 的启动器：运行前校验 `opl-package.json`（`opl.package.v2`）身份与最高语义版本号。如需独立部署，可显式设置 `INSTALL_MODE=standalone` 将 `opl-package.json`、`bin/`、`runtime/`、`skills/` 与 `assets/` 复制到 `<prefix>/share/opl-persona`。两种模式均不发布 OCI release；正式 Package 更新统一通过 Framework OCI 生命周期完成。
 
 ## OPL 托管通道
 
-Persona owner 通过 `plugins/opl-persona/opl-package.json` 声明 Package identity、
-capability、dependency intent、App contribution 与 content lock，并在
+Persona owner 通过根目录 `opl-package.json` 声明 `identity`、`dependencies`、`permissions`、`provides`、`ui.declarative` 与 `distribution`；确定性内容锁 `opl-release.lock.json` 由 `opl pack build` 生成。
 `codex_surface.configured_codex_plugin_carrier` 里声明 Codex 插件市场来源与唯一
 publication 通道，再独立发布不可变 GHCR payload。安装与 publication 是两个 authority 面：
 Skill 同步策略只允许 Codex 作用域；不会隐式复制到工作空间或单项任务目录。

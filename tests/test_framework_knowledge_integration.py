@@ -15,9 +15,7 @@ from opl_persona.core import build_obsidian_note_proposals
 from opl_persona.proposals import ProposalStore
 
 
-FRAMEWORK = os.environ.get("OPL_FRAMEWORK_ROOT")
-pytestmark = pytest.mark.skipif(not FRAMEWORK, reason="OPL_FRAMEWORK_ROOT is required for the real Framework CLI")
-LAUNCHER = Path(__file__).parents[1] / "plugins/opl-persona/bin/opl-persona"
+LAUNCHER = Path(__file__).parents[1] / "bin/opl-persona"
 
 
 @pytest.mark.parametrize("external", [False, True], ids=["workspace-markdown", "external-markdown"])
@@ -51,7 +49,6 @@ def test_actual_framework_roundtrip_source_change_and_revocation(tmp_path, monke
     }))
     monkeypatch.setenv("OPL_PROFILE_WORKSPACE", str(workspace))
     monkeypatch.setenv("OPL_STATE_DIR", str(tmp_path / "opl-state"))
-    monkeypatch.setenv("PATH", str(Path(FRAMEWORK) / "bin") + os.pathsep + os.environ["PATH"])
     store = WorkspaceStore()
     accepted_source = read_knowledge_source("synthetic.research.principle", store.paths)
     assert accepted_source["content"] == note.read_text()

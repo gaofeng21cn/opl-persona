@@ -1,12 +1,18 @@
-"""Invoke independently installed connector Packages through the Framework."""
+"""Invoke independently installed connector Packages through OPL v2 (`opld`)."""
 
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
 from contextlib import contextmanager
+
+try:
+    from opl_client import OplClientError, connect
+except ModuleNotFoundError:  # pragma: no cover - optional when opl_client SDK is absent
+    class OplClientError(RuntimeError):
+        """Fallback error type when opl_client is unavailable."""
+
+    connect = None  # type: ignore[assignment]
 
 from .contract import Readback, ToolPaused, exclusive_lane, strict_object
 from ..primitives import text
@@ -54,36 +60,76 @@ class PackageTool:
     def _call(self, phase, value):
         method = "execute" if phase == "execute" else "read"
         ref = f"{CAPABILITY}#{phase}"
-        argv = ["opl", "app", "contribution", method, "--package-id", self.package_id,
-                "--ref", ref, "--input-stdin", "--json"]
-        if method == "execute":
-            argv.append("--confirm")
+        rpc_method = "app.contribution.execute" if method == "execute" else "app.contribution.read"
+        rpc_params = (
+            {"package_id": self.package_id, "action_id": ref, "payload": value}
+            if method == "execute"
+            else {"package_id": self.package_id, "ref": ref, "input": value}
+        )
+        client_connect = connect
+        client_error = OplClientError
+        if client_connect is None:
+            try:
+                from opl_client import OplClientError as _SdkError, connect as _sdk_connect
+            except ModuleNotFoundError as exc:
+                raise ToolPaused(f"{self.package_id} could not verify {phase} through Framework") from exc
+            client_connect = _sdk_connect
+            client_error = _SdkError
+        elif client_error.__module__ == __name__:
+            try:
+                from opl_client import OplClientError as _SdkError
+                client_error = _SdkError
+            except ModuleNotFoundError:
+                pass
         try:
-            result = subprocess.run(
-                argv, input=json.dumps(value, allow_nan=False), capture_output=True, text=True,
-                env=os.environ | {"OPL_PROFILE_WORKSPACE": str(self.paths.workspace)},
-                timeout=30, check=False,
-            )
-            if result.returncode:
-                raise ValueError("Framework connector invocation failed")
-            outer = json.loads(result.stdout)["opl_app_contribution"]
-            if (outer["surface_kind"], outer["package_id"], outer["ref"], outer["operation"]) != (
-                    "opl_app_package_contribution.v1", self.package_id, ref, method):
-                raise ValueError("Framework connector identity changed")
-            envelope = outer["response"]
-            if (envelope["schema_version"], envelope["ok"], envelope["ref"], envelope["operation"]) != (
-                    "opl-package-app-contribution-response.v1", True, ref, method):
-                raise ValueError("Connector response identity changed")
-            result = envelope["result"]
-            if method == "read" and (result.get("kind") != "data" or result.get("state") != "ready"):
-                raise ValueError("Connector read is not ready")
-            if method == "execute" and result.get("kind") != "action":
+            with client_connect() as client:
+                raw_response = client.call(rpc_method, rpc_params)
+            payload = raw_response
+            for _ in range(4):
+                if not isinstance(payload, dict):
+                    raise ValueError("Connector response must be an object")
+                if payload.get("ok") is False:
+                    raise ValueError("Connector invocation returned ok=False")
+                if payload.get("package_id") not in (None, self.package_id):
+                    raise ValueError("Connector package_id mismatch")
+                if "result" in payload and not ("kind" in payload and isinstance(payload.get("data"), dict)):
+                    inner = payload["result"]
+                    if not isinstance(inner, dict):
+                        raise ValueError("Connector result must be an object")
+                    payload = inner
+                    continue
+                break
+            else:
+                if not isinstance(payload, dict):
+                    raise ValueError("Connector response must be an object")
+                if payload.get("ok") is False:
+                    raise ValueError("Connector invocation returned ok=False")
+                if payload.get("package_id") not in (None, self.package_id):
+                    raise ValueError("Connector package_id mismatch")
+                if "result" in payload and not ("kind" in payload and isinstance(payload.get("data"), dict)):
+                    raise ValueError("Connector envelope exceeded maximum nesting depth")
+            if method == "read":
+                state_val = payload.get("state") or payload.get("status")
+                if state_val not in (None, "ready"):
+                    raise ValueError("Connector read is not ready")
+                if "kind" in payload and payload.get("kind") != "data":
+                    raise ValueError("Connector read did not return data")
+            elif "kind" in payload and payload.get("kind") != "action":
                 raise ValueError("Connector execute did not return an action")
-            data = result["data"]
+            if "data" in payload:
+                if not isinstance(payload["data"], dict):
+                    raise ValueError("Connector did not return a data object")
+                data = payload["data"]
+            else:
+                data = payload
             if not isinstance(data, dict):
                 raise ValueError("Connector did not return a data object")
+            if data.get("ok") is False:
+                raise ValueError("Connector invocation returned ok=False")
+            if data.get("package_id") not in (None, self.package_id):
+                raise ValueError("Connector package_id mismatch")
             return data
-        except (OSError, KeyError, AttributeError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+        except (OSError, KeyError, AttributeError, TypeError, ValueError, client_error) as exc:
             raise ToolPaused(f"{self.package_id} could not verify {phase} through Framework") from exc
 
     def describe(self):

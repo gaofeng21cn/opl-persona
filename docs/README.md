@@ -14,4 +14,4 @@ Family-wide documentation lifecycle rules live in the [OPL docs lifecycle policy
 | [Architecture Guidance](architecture-guidance.md) | Target design | Cross-repository target boundaries, composable Capability/Adapter/Binding/Recipe model, and external-portal target scope |
 | [Personal Profile & Form Fill](personal-profile-form-fill.md) | Target design | Target `personal_field.v1` field catalog, form-fill proposal/receipt schema, and adapter boundary |
 
-Target-design documents do not create callable CLIs, schemas, or installed runtime guarantees; current machine truth lives in `plugins/opl-persona/opl-package.json`, runtime modules, and `tests/`.
+Target-design documents do not create callable CLIs, schemas, or installed runtime guarantees; current machine truth lives in `opl-package.json`, `runtime/opl_persona/`, and `tests/`.

@@ -675,18 +675,41 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
         if not isinstance(request, dict):
             raise ValueError("request must be an object")
         raw_ref = request.get("ref")
+        raw_action_id = request.get("action_id")
         if isinstance(raw_ref, str):
             ref = raw_ref
-        unexpected = sorted(set(request) - {"schema_version", "operation", "ref", "input"})
+        elif isinstance(raw_action_id, str):
+            ref = raw_action_id
+        allowed_fields = {
+            "schema_version",
+            "operation",
+            "ref",
+            "input",
+            "package_id",
+            "action_id",
+            "payload",
+            "dry_run",
+        }
+        unexpected = sorted(set(request) - allowed_fields)
         if unexpected:
             raise ValueError("request contains unsupported fields: " + ", ".join(unexpected))
+        package_id = request.get("package_id")
+        if package_id not in (None, "opl-persona"):
+            raise ValueError(f"unsupported package_id: {package_id}")
         if request.get("schema_version") != REQUEST_SCHEMA:
             raise ValueError(f"schema_version must be {REQUEST_SCHEMA}")
         operation = request.get("operation")
         if operation not in {"describe", "read", "execute"}:
             raise ValueError("operation must be describe, read, or execute")
+        if isinstance(raw_ref, str) and isinstance(raw_action_id, str) and raw_ref != raw_action_id:
+            raise ValueError("ref and action_id must match when both are provided")
         if not ref:
             raise ValueError("ref must be a non-empty string")
+        if "input" in request and "payload" in request:
+            raise ValueError("supply only one of input or payload")
+        dry_run = request.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise ValueError("dry_run must be a boolean")
 
         data_contract = DATA_CONTRACTS.get(ref)
         action_contract = ACTION_CONTRACTS.get(ref)
@@ -694,7 +717,7 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
             raise ValueError("ref is not declared by this package")
 
         if operation == "describe":
-            if "input" in request:
+            if "input" in request or "payload" in request:
                 raise ValueError("describe does not accept input")
             return 0, _response(
                 ref,
@@ -715,7 +738,8 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
         contract = data_contract if operation == "read" else action_contract
         if contract is None:
             raise ValueError(f"{ref} does not support {operation}")
-        value = _request_input(request.get("input"))
+        raw_payload = request["input"] if "input" in request else request.get("payload")
+        value = _request_input(raw_payload)
         _validate_input(value, contract)
         if operation == "read":
             result = (
@@ -723,6 +747,15 @@ def handle_request(request: object) -> tuple[int, dict[str, object]]:
                 if ref in {"personal.context.v1#today", "personal.inbox.v1#recent"}
                 else _workspace_read(ref, contract, value)
             )
+        elif dry_run:
+            result = {
+                "kind": "action",
+                "status": "dry_run_valid",
+                "dry_run": True,
+                "confirmation_required": contract["confirmation_required"],
+                "result_schema": contract["result"],
+                "execution_policy": "dry_run_validation",
+            }
         else:
             result = _execute(ref, contract, value)
         return 0, _response(ref, operation, result)
