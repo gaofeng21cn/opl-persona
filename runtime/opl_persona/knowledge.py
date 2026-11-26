@@ -12,7 +12,13 @@ import tempfile
 from typing import Any
 from uuid import uuid4
 
-from opl_client import OplClientError, connect
+try:
+    from opl_client import OplClientError, connect
+except ModuleNotFoundError:  # pragma: no cover - standalone mode without opl_client SDK
+    class OplClientError(RuntimeError):
+        """Fallback error type when opl_client is unavailable."""
+
+    connect = None  # type: ignore[assignment]
 
 from .paths import PersonaPaths
 
@@ -195,8 +201,23 @@ def _lookup_item(
 
 def _notify_daemon_writeback(paths: PersonaPaths, method: str, params: dict[str, Any]) -> None:
     """Best-effort notification to active opld workspace if registered; never breaks standalone mode."""
+    client_connect = connect
+    client_error = OplClientError
+    if client_connect is None:
+        try:
+            from opl_client import OplClientError as _SdkError, connect as _sdk_connect
+        except ModuleNotFoundError:
+            return
+        client_connect = _sdk_connect
+        client_error = _SdkError
+    elif client_error.__module__ == __name__:
+        try:
+            from opl_client import OplClientError as _SdkError
+            client_error = _SdkError
+        except ModuleNotFoundError:
+            pass
     try:
-        with connect() as client:
+        with client_connect() as client:
             listed = client.workspace_list()
             ws_resolved = str(paths.workspace.resolve(strict=False))
             workspaces = listed.get("workspaces", []) if isinstance(listed, dict) else []
@@ -209,7 +230,7 @@ def _notify_daemon_writeback(paths: PersonaPaths, method: str, params: dict[str,
             )
             if match and isinstance(match.get("workspace_id"), str):
                 client.call(method, {"workspace_id": match["workspace_id"], **params})
-    except (OSError, ValueError, OplClientError):
+    except (OSError, ValueError, client_error):
         return
 
 

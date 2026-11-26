@@ -13,7 +13,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from opl_client import OplClientError, connect
+try:
+    from opl_client import OplClientError, connect
+except ModuleNotFoundError:  # pragma: no cover - optional when opl_client SDK is absent
+    class OplClientError(RuntimeError):
+        """Fallback error type when opl_client is unavailable."""
+
+    connect = None  # type: ignore[assignment]
 
 from .paths import PersonaPaths
 from .knowledge import source_dependencies, verify_knowledge_dependencies
@@ -130,8 +136,24 @@ def relay_read(ref: str, value: dict[str, Any], paths: PersonaPaths) -> dict[str
     if ref not in {"personal.memory.v1#people", "personal.memory.v1#search"}:
         raise ValueError("unsupported Relay memory read ref")
     del paths  # opld manages workspace isolation; Persona keeps paths arg for ABI stability.
+    client_connect = connect
+    client_error = OplClientError
+    if client_connect is None:
+        try:
+            from opl_client import OplClientError as _SdkError, connect as _sdk_connect
+            client_connect = _sdk_connect
+            client_error = _SdkError
+        except ModuleNotFoundError:
+            return {"state": "unavailable", "items": [], "package_id": "opl-relay", "ref": ref,
+                    "reason": "Relay public memory ABI unavailable"}
+    elif client_error.__module__ == __name__:
+        try:
+            from opl_client import OplClientError as _SdkError
+            client_error = _SdkError
+        except ModuleNotFoundError:
+            pass
     try:
-        with connect() as client:
+        with client_connect() as client:
             raw_response = client.call(
                 "app.contribution.read",
                 {"package_id": "opl-relay", "ref": ref, "input": value},
@@ -180,7 +202,7 @@ def relay_read(ref: str, value: dict[str, Any], paths: PersonaPaths) -> dict[str
             items.append(item)
         return {"state": "ready", "items": items, "source_policy": copy.deepcopy(policy),
                 "package_id": "opl-relay", "ref": ref}
-    except (OSError, ValueError, OplClientError):
+    except (OSError, ValueError, client_error):
         return {"state": "unavailable", "items": [], "package_id": "opl-relay", "ref": ref,
                 "reason": "Relay public memory ABI unavailable"}
 
