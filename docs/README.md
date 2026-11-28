@@ -10,7 +10,7 @@ Family-wide documentation lifecycle rules live in the [OPL docs lifecycle policy
 | [External Professional Work](external-professional-work.md) | Current handbook | Step-by-step setup and recovery for resumable tasks, browser/desktop tools, GitHub labels, and connector packages |
 | [Mail Policy](mail-policy.md) | Current implementation | Mail policy role mapping, snapshot digest, triage evidence boundary, and drafting feedback evaluation |
 | [App Integration](app-integration.md) | Current boundary | Role-neutral OPL App consumption, approval projection, and cross-domain confirmation rules |
-| [Distribution](distribution.md) | Current boundary | Codex Plugin marketplace, `make install-local` launcher modes, and GHCR OCI publication boundary |
+| [Distribution](distribution.md) | Current boundary | Codex Plugin `carriers/codex-sync` projection, `make install-local` launcher modes, and GHCR OCI publication boundary |
 | [Architecture Guidance](architecture-guidance.md) | Target design | Cross-repository target boundaries, composable Capability/Adapter/Binding/Recipe model, and external-portal target scope |
 | [Personal Profile & Form Fill](personal-profile-form-fill.md) | Target design | Target `personal_field.v1` field catalog, form-fill proposal/receipt schema, and adapter boundary |
 
