@@ -37,8 +37,8 @@ OPL Pack 在安装或开发链接（`opl pack link .`）时通过 `carriers/code
 ## OPL 托管通道
 
 Persona owner 通过根目录 `opl-package.json` 声明 `identity`、`dependencies`、`permissions`、`provides`、`ui.declarative` 与 `distribution`；确定性内容锁 `opl-release.lock.json` 由 `opl pack build` 生成。
-`codex_surface.configured_codex_plugin_carrier` 里声明 Codex 插件市场来源与唯一
-publication 通道，再独立发布不可变 GHCR payload。安装与 publication 是两个 authority 面：
+Framework 在安装或 `opl pack link .` 时通过 `carriers/codex-sync` 生成 Codex 插件载体投影，并经唯一 GHCR
+publication 通道独立发布不可变载荷。安装与 publication 是两个 authority 面：
 Skill 同步策略只允许 Codex 作用域；不会隐式复制到工作空间或单项任务目录。
 
 ```text
@@ -74,7 +74,7 @@ projection 只能聚合这些结果，不能从本仓文档、源码 tag 或 des
 本仓负责以下准备：
 
 - 版本化源代码、双语用户入口、Apache License 2.0 和品牌资产；
-- 可从本地或 Git 插件市场安装的 Codex 插件载体；
+- 通过 `opl pack install` 或 `opl pack link .` 挂载并经 `carriers/codex-sync` 物化的 `opl.package.v2` 载体；
 - 单元测试、插件校验与 GitHub 持续集成；
 - 明确的分身工作空间数据边界。
 
